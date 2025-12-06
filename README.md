@@ -28,6 +28,11 @@
 
 ---
 
+
+<p align="center">
+  <img src="/github/UsgromanaLogin.png" width="516" />
+</p>
+
 ## Overview
 
 **ComfyUI Usgromana** is a comprehensive security layer that adds:
