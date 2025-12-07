@@ -91,7 +91,9 @@ Complete backend implementation:
 ### 🗂️ **User Environment Tools**
 From `user_env.py`:
 - Purge a user’s folders  
-- List user-owned files  
+- List user-owned files
+- Promote user workflow to default (all user view)
+- Delete single user workflow
 - Toggle gallery‑folder mode
 
 <p align="center">
@@ -343,6 +345,12 @@ All notable changes to **ComfyUI Usgromana** are documented here.
 This project follows a semantic-style versioning flow adapted for active development.
 
 ---
+
+## **v1.6.0 - Refactor & update User Workflow Administration
+### 📂 User Files Additions
+- **Monolith Addition:** Added options to select and delete individual files & Promote Workflows
+  - `routes/user.py` (Updated information passage)
+  - `web/usgromana_settings.js` (updated the middleware and UI architecture)
 
 ## **v1.5.0 — Modular Refactor & Architecture Overhaul (2025-12-6)**
 ### 🏗️ Architectural Refactor
