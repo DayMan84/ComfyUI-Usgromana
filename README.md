@@ -52,12 +52,20 @@ It replaces the older Sentinel system with a faster, cleaner, more modular archi
 Four roles: **Admin, Power, User, Guest**  
 Each with configurable permissions stored in `usgromana_groups.json`.
 
+<p align="center">
+  <img src="./readme/UsgromanaLogin.png" width="400" />
+</p>
+
 ### 🚫 **Save & Delete Workflow Blocking**
 Non‑privileged roles cannot:
 - Save workflows  
 - Export workflows  
 - Overwrite existing workflows  
 - Delete workflow files  
+
+<p align="center">
+  <img src="./readme/AdminGroups.png" width="400" />
+</p>
 
 All blocked actions trigger:
 - A server‑side 403  
@@ -84,7 +92,11 @@ Complete backend implementation:
 From `user_env.py`:
 - Purge a user’s folders  
 - List user-owned files  
-- Toggle gallery‑folder mode  
+- Toggle gallery‑folder mode
+
+<p align="center">
+  <img src="./readme/UserFiles.png" width="400" />
+</p>
 
 ### 🖥️ **Transparent Themed Admin UI**
 The administrative modal features:
