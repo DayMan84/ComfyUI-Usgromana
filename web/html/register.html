@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Usgromana - Register</title>
+
+    <link rel="icon" href="/usgromana/assets/light_icon.ico" type="image/x-icon">
+
+    <!-- Light mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/light_icon.ico"
+        media="(prefers-color-scheme: light)">
+
+    <!-- Dark mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/dark_icon.ico"
+        media="(prefers-color-scheme: dark)">
+
+    <link rel="stylesheet" type="text/css" href="/usgromana/css/styles.css">
+</head>
+
+<body data-admin-user="{{ X-Admin-User }}">
+    <div class="container">
+        <picture>
+            <!-- Dark mode neon logo -->
+            <source srcset="/usgromana/assets/dark_logo_transparent.png"
+                    media="(prefers-color-scheme: dark)">
+            <!-- Light mode metallic logo -->
+            <source srcset="/usgromana/assets/light_logo_transparent.png"
+                    media="(prefers-color-scheme: light)">
+            <img class="logo"
+                src="/usgromana/assets/logo_transparent.png"
+                alt="USG Logo">
+        </picture>
+        <h1 class="title register">Register</h1>
+        <form id="register-form" onsubmit="register(event)">
+            <div class="form-fields">
+                <div class="fields-group" id="admin-fields">
+                    <h3 class="subtitle">Admin Authentication</h3>
+                    <span class="divider"></span>
+                    <div class="form-field">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username">
+                    </div>
+                    <div class="form-field">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password">
+                    </div>
+                </div>
+                <span class="divider vertical" id="vertical-divider"></span>
+                <div class="fields-group" id="new-user-fields">
+                    <h3 class="subtitle">New User</h3>
+                    <span class="divider"></span>
+                    <div class="form-field">
+                        <label for="new_user_username">Username:</label>
+                        <input type="text" id="new_user_username" name="new_user_username" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="new_user_password">Password:</label>
+                        <input type="password" id="new_user_password" name="new_user_password" required>
+                    </div>
+                </div>
+            </div>
+            <div class="form-field" id="register-link">
+                <a href="/login">Login to an Existing Account</a>
+            </div>
+            <button class="btn" type="submit">Register</button>
+        </form>
+    </div>
+    <div class="toast-container" id="toasts"></div>
+</body>
+<script src="/usgromana/js/auth.js"></script>
+
+</html>

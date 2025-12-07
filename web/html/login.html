@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#05060a" media="(prefers-color-scheme: dark)">
+
+    <title>ComfyUI Usgromana - Login</title>
+
+    <link rel="icon" href="/usgromana/assets/light_icon.ico" type="image/x-icon">
+
+    <!-- Light mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/light_icon.ico"
+        media="(prefers-color-scheme: light)">
+
+    <!-- Dark mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/dark_icon.ico"
+        media="(prefers-color-scheme: dark)">
+
+    <link rel="stylesheet" type="text/css" href="/usgromana/css/styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <picture>
+            <!-- Dark mode neon logo -->
+            <source srcset="/usgromana/assets/dark_logo_transparent.png"
+                    media="(prefers-color-scheme: dark)">
+            <!-- Light mode metallic logo -->
+            <source srcset="/usgromana/assets/light_logo_transparent.png"
+                    media="(prefers-color-scheme: light)">
+            <img class="logo"
+                src="/usgromana/assets/logo_transparent.png"
+                alt="USG Logo">
+        </picture>
+        <h1 class="title login">Login</h1>
+        <form id="login-form" onsubmit="login(event)">
+            <div class="form-field">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-field">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-field">
+                <a href="/usgromana/generate_token">Get API Token</a>
+            </div>
+            <div class="form-field">
+                <a href="/register">Register a New User</a>
+            </div>
+
+            <!-- Main login + guest login -->
+            <div class="form-field" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button class="btn" type="submit">Login</button>
+                <button class="btn" type="button" onclick="guestLogin(event)">Guest Login</button>
+            </div>
+
+            <!-- hidden flag used for guest login -->
+            <input type="hidden" id="guest_login_flag" name="guest_login" value="false">
+            <!-- Version info -->
+            <div>
+                <p class="version-info",
+                    style="margin-top:1rem;
+                    font-size:0.9rem;
+                    color: #888888;
+                    text-align:center;
+                    "
+                    >
+                ComfyUI Usgromana - v0.11.3</p>
+            </div>
+        </form>
+    </div>
+    <div class="toast-container" id="toasts"></div>
+</body>
+<script src="/usgromana/js/auth.js"></script>
+
+</html>
