@@ -350,7 +350,7 @@ This project follows a semantic-style versioning flow adapted for active develop
 ### 🛠️ Admin User group Extension list
   - Resolved an issue which caused duplicate extensions to be listed
   - List now accounts for explicitly listed extensions
-### 🛠️ Per user SFW reactor intercept
+### 🛠️ Per user SFW reactor intercept (Highly experimental)
   - Admin can now toggle SFW on/off per user
   - `utils/reactor_sfw_intercept.py` (added new file)
 
