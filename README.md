@@ -346,6 +346,14 @@ This project follows a semantic-style versioning flow adapted for active develop
 
 ---
 
+## **v1.7.0 - Updated extension logic & added sfw toggle
+### 🛠️ Admin User group Extension list
+  - Resolved an issue which caused duplicate extensions to be listed
+  - List now accounts for explicitly listed extensions
+### 🛠️ Per user SFW reactor intercept
+  - Admin can now toggle SFW on/off per user
+  - `utils/reactor_sfw_intercept.py` (added new file)
+
 ## **v1.6.0 - Refactor & update User Workflow Administration
 ### 📂 User Files Additions
 - **Monolith Addition:** Added options to select and delete individual files & Promote Workflows
