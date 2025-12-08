@@ -1,7 +1,7 @@
 [project]
 name = "Usgromana"
 description = "The next-generation security, governance, permissions, and multi‑user control system for ComfyUI."
-version = "1.6.3"
+version = "1.6.0"
 license = {file = "LICENSE"} 
 # classifiers = [
 #     # For OS-independent nodes (works on all operating systems)
