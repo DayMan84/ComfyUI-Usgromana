@@ -91,6 +91,11 @@ const CSS_BLOCK_MAP = {
         "li[aria-label='User']",
         "li.p-listbox-option[aria-label='User']"
     ],
+    "settings_keybinding": [
+        "li[aria-label='Keybinding']",
+        "li.p-listbox-option[aria-label='Keybinding']"
+    ],
+
     // iTools
     "settings_itools": [
         ".itools-floating-bar", 
@@ -602,134 +607,148 @@ class usgromanaDialog extends ComfyDialog {
     close() { this.overlay.remove(); }
 
 renderUsers(list, container) {
-        const currentName = currentUser?.username || null;
-        const self = this;
+    const currentName = currentUser?.username || null;
+    const self = this;
 
-        let html = `
-            <table class="usgromana-table">
-                <thead>
-                    <tr>
-                        <th>User Account</th>
-                        <th>Assigned Group</th>
-                        <th style="text-align:right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+    let html = `
+        <table class="usgromana-table">
+            <thead>
+                <tr>
+                    <th>User Account</th>
+                    <th>Assigned Group</th>
+                    <th style="text-align:center;width:120px;">SFW Check</th>
+                    <th style="text-align:right;width:180px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    list.forEach(u => {
+        const grp = (u.groups && u.groups.length) ? u.groups[0] : "user";
+        const uname = u.username || "unknown";
+        const isSelf = currentName && uname === currentName;
+        const isGuest = uname.toLowerCase() === "guest";
+
+        // NEW: per-user SFW flag; default ON if undefined
+        const sfwEnabled = (u.sfw_check !== false);
+
+        let actionsHtml = `
+            <button class="usgromana-btn btn-save" data-user="${uname}">
+                Save Changes
+            </button>
         `;
 
-        list.forEach(u => {
-            const grp = (u.groups && u.groups.length) ? u.groups[0] : "user";
-            const uname = u.username || "unknown";
-            const isSelf = currentName && uname === currentName;
-            const isGuest = uname.toLowerCase() === "guest";
-
-            // Build the actions for this row
-            let actionsHtml = `
-                <button class="usgromana-btn btn-save" data-user="${uname}">
-                    Save Changes
+        // Don't allow deleting yourself or the guest account
+        if (!isSelf && !isGuest) {
+            actionsHtml += `
+                <button class="usgromana-btn usgromana-btn-danger btn-delete" data-user="${uname}">
+                    Delete
                 </button>
             `;
+        }
 
-            // Only show delete for:
-            //  - not self
-            //  - not 'guest'
-            if (!isSelf && !isGuest) {
-                actionsHtml += `
-                    <button class="usgromana-btn usgromana-btn-danger btn-delete" data-user="${uname}">
-                        Delete
-                    </button>
-                `;
+        html += `
+            <tr>
+                <td><strong>${uname}</strong></td>
+                <td>
+                    <select
+                        class="usgromana-role-select"
+                        data-user="${uname}"
+                        style="background:var(--comfy-input-bg); color:var(--input-text); border:1px solid #555; padding:6px 10px; border-radius:4px; width: 150px;"
+                    >
+                        ${GROUPS.map(g => `
+                            <option value="${g}" ${g === grp ? "selected" : ""}>
+                                ${g.toUpperCase()}
+                            </option>
+                        `).join("")}
+                    </select>
+                </td>
+                <td style="text-align:center">
+                    <input
+                        type="checkbox"
+                        class="usgromana-sfw-toggle"
+                        data-user="${uname}"
+                        ${sfwEnabled ? "checked" : ""}
+                    />
+                </td>
+                <td style="text-align:right">
+                    ${actionsHtml}
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+
+    // --- Save handler per user ---
+    container.querySelectorAll(".btn-save").forEach(btn => {
+        btn.onclick = async () => {
+            const u = btn.dataset.user;
+            const g = container.querySelector(`select[data-user="${u}"]`).value;
+
+            const sfwCheckbox = container.querySelector(`.usgromana-sfw-toggle[data-user="${u}"]`);
+            const sfw = sfwCheckbox ? sfwCheckbox.checked : true;
+
+            btn.innerText = "Saving...";
+            try {
+                await api.fetchApi(`/usgromana/api/users/${u}`, {
+                    method: "PUT",
+                    body: JSON.stringify({
+                        groups: [g],
+                        sfw_check: sfw,
+                    }),
+                });
+                btn.innerText = "Saved";
+            } catch (e) {
+                console.error("[usgromana] Failed to update user:", e);
+                btn.innerText = "Error";
             }
+            setTimeout(() => (btn.innerText = "Save Changes"), 1000);
+        };
+    });
 
-            html += `
-                <tr>
-                    <td><strong>${uname}</strong></td>
-                    <td>
-                        <select
-                            class="usgromana-role-select"
-                            data-user="${uname}"
-                            style="background:var(--comfy-input-bg); color:var(--input-text); border:1px solid #555; padding:6px 10px; border-radius:4px; width: 150px;"
-                        >
-                            ${GROUPS.map(g => `
-                                <option value="${g}" ${g === grp ? "selected" : ""}>
-                                    ${g.toUpperCase()}
-                                </option>
-                            `).join("")}
-                        </select>
-                    </td>
-                    <td style="text-align:right">
-                        ${actionsHtml}
-                    </td>
-                </tr>
-            `;
-        });
+    // --- Delete handler per user (unchanged logic) ---
+    container.querySelectorAll(".btn-delete").forEach(btn => {
+        btn.onclick = async () => {
+            const u = btn.dataset.user;
+            const confirmed = window.confirm(
+                `Are you sure you want to delete the user "${u}"?\nThis cannot be undone.`
+            );
+            if (!confirmed) return;
 
-        html += `</tbody></table>`;
-        container.innerHTML = html;
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "Deleting...";
 
-        // --- Save button handlers ---
-        container.querySelectorAll(".btn-save").forEach(btn => {
-            btn.onclick = async () => {
-                const u = btn.dataset.user;
-                const g = container.querySelector(`select[data-user="${u}"]`).value;
-                btn.innerText = "Saving...";
-                try {
-                    await api.fetchApi(`/usgromana/api/users/${u}`, {
-                        method: "PUT",
-                        body: JSON.stringify({ groups: [g] }),
-                    });
-                    btn.innerText = "Saved";
-                } catch (e) {
-                    console.error("[Usgromana] Failed to update user groups:", e);
-                    btn.innerText = "Error";
-                }
-                setTimeout(() => (btn.innerText = "Save Changes"), 1000);
-            };
-        });
+            try {
+                const res = await api.fetchApi(`/usgromana/api/users/${u}`, {
+                    method: "DELETE",
+                });
 
-        // --- Delete button handlers ---
-        container.querySelectorAll(".btn-delete").forEach(btn => {
-            btn.onclick = async () => {
-                const u = btn.dataset.user;
-                const confirmed = window.confirm(
-                    `Are you sure you want to delete the user "${u}"?\nThis cannot be undone.`
-                );
-                if (!confirmed) return;
-
-                btn.disabled = true;
-                const originalText = btn.innerText;
-                btn.innerText = "Deleting...";
-
-                try {
-                    const res = await api.fetchApi(`/usgromana/api/users/${u}`, {
-                        method: "DELETE",
-                    });
-
-                    if (res.status === 200) {
-                        // Reload user list after delete
-                        const usersData = await getData("/usgromana/api/users");
-                        const usersList = usersData?.users || [];
-                        self.renderUsers(usersList, container);
-                    } else {
-                        let msg = "Failed to delete user.";
-                        try {
-                            const err = await res.json();
-                            if (err && err.error) msg = err.error;
-                        } catch {}
-                        window.alert(msg);
-                        btn.disabled = false;
-                        btn.innerText = originalText;
-                    }
-                } catch (e) {
-                    console.error("[Usgromana] Failed to delete user:", e);
-                    window.alert("Unexpected error while deleting user.");
+                if (res.status === 200) {
+                    const usersData = await getData("/usgromana/api/users");
+                    const usersList = usersData?.users || [];
+                    self.renderUsers(usersList, container);
+                } else {
+                    let msg = "Failed to delete user.";
+                    try {
+                        const err = await res.json();
+                        if (err && err.error) msg = err.error;
+                    } catch {}
+                    window.alert(msg);
                     btn.disabled = false;
                     btn.innerText = originalText;
                 }
-            };
-        });
-    }
-
+            } catch (e) {
+                console.error("[usgromana] Failed to delete user:", e);
+                window.alert("Unexpected error while deleting user.");
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        };
+    });
+}
 
         async renderIpRules(container) {
         container.innerHTML = `
@@ -1210,6 +1229,10 @@ renderUserEnv(container, usersList) {
         categories.delete("usgromana.Configuration");
         const sortedCats = Array.from(categories).sort();
 
+        // IDs that are already explicitly defined in Sections 1 & 2
+        // (and in CSS_BLOCK_MAP). We will NOT auto-generate rows for these.
+        const explicitIds = new Set(Object.keys(CSS_BLOCK_MAP));
+
         // --- DRAW TABLE ---
         let html = `<table class="usgromana-table">
             <thead><tr><th>Feature / Category</th>${GROUPS.map(g => `<th class="usgromana-check-cell">${g.toUpperCase()}</th>`).join("")}</tr></thead>
@@ -1265,7 +1288,7 @@ renderUserEnv(container, usersList) {
         html += drawRow("Sidebar Menu: Manage Extensions", "ui_menu_extensions");
         html += drawRow("Sidebar Menu: Manager Button", "ui_menu_manager");
 
-        //  Section (2): Settings Menu Options
+        //  Section 3: Settings Menu Options
         html += drawRow("Settings Menu", null, true);
         html += drawRow("Settings Menu: User", "settings_user");
         html += drawRow("Settings Menu: usgromana", "settings_usgromanasettings");
@@ -1273,11 +1296,18 @@ renderUserEnv(container, usersList) {
         html += drawRow("Settings Menu: Keybinding", "settings_keybinding");
         html += drawRow("Settings Menu: Appearance", "settings_makadiappearance");
         
-        // Section 3: Extensions
+        // Section 4: Extensions
         html += drawRow("Extension UI & Settings Categories", null, true);
         sortedCats.forEach(c => {
-             html += drawRow(c, getSanitizedId(c));
+            const id = getSanitizedId(c);
+
+            // If this id is already explicitly handled in Sections 1/2 (or in CSS_BLOCK_MAP),
+            // skip it so we don't show duplicate/ghost toggles.
+            if (explicitIds.has(id)) return;
+
+            html += drawRow(c, id);
         });
+
 
         html += `</tbody></table>`;
         container.innerHTML = html;
