@@ -95,7 +95,23 @@ const CSS_BLOCK_MAP = {
         "li[aria-label='Keybinding']",
         "li.p-listbox-option[aria-label='Keybinding']"
     ],
-
+    "settings_appearance": [
+        "li[aria-label='Appearance']",
+        "li.p-listbox-option[aria-label='Appearance']"
+    ],
+    "settings_litegraph": [
+        "li[aria-label='Lite Graph']",
+        "li.p-listbox-option[aria-label='Lite Graph']"
+    ],
+    "Serttings_3D": [
+        "li[aria-label='3D']",
+        "li.p-listbox-option[aria-label='3D']"
+    ],
+    "settings_maskeditor": [
+        "li[aria-label='Mask Editor']",
+        "li.p-listbox-option[aria-label='Mask Editor']"
+    ],
+    
     // iTools
     "settings_itools": [
         ".itools-floating-bar", 
