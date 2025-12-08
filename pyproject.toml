@@ -1,5 +1,5 @@
 [project]
-name = "usgromana"
+name = "Usgromana"
 description = "The next-generation security, governance, permissions, and multi‑user control system for ComfyUI."
 version = "1.6.0"
 license = {file = "LICENSE"} 
