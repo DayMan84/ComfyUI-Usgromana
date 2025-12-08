@@ -31,7 +31,7 @@ Documentation = "https://github.com/DayMan84/ComfyUI-Usgromana/wiki"
 [tool.comfy]
 PublisherId = "dayman84"
 DisplayName = "ComfyUI-Usgromana"
-Icon = "https://github.com/DayMan84/ComfyUI-Usgromana/tree/main/web/assets/dark_icon.ico"
+Icon = "https://github.com/DayMan84/ComfyUI-Usgromana/tree/main/web/assets/dark_logo_transparent.png"
 includes = [] 
 # "requires-comfyui" = ">=1.0.0"  # ComfyUI version compatibility
 
