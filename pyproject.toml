@@ -1,7 +1,7 @@
 [project]
 name = "Usgromana"
 description = "The next-generation security, governance, permissions, and multi‑user login control system for ComfyUI. Extension implements login, multi-user registration, user group management, ui management, group workflow management, SFW user management, IP filtering, and user-specific input/output workflow directories, and more."
-version = "1.7.3"
+version = "1.7.4"
 license = {file = "LICENSE"} 
 # classifiers = [
 #     # For OS-independent nodes (works on all operating systems)
