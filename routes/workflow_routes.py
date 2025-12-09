@@ -6,7 +6,7 @@ from aiohttp import web
 
 from ..globals import jwt_auth, current_username_var
 from ..utils import user_env
-from ..utils.nsfw_guard import should_block_image_for_current_user
+from ..utils.sfw_intercept.nsfw_guard import should_block_image_for_current_user
 import folder_paths
 
 # 1. Determine Paths
