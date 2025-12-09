@@ -23,7 +23,8 @@ const CSS_BLOCK_MAP = {
     "ui_side_history": ["#comfy-view-history-button", "[title='History']", ".pi-history"], // Often clock icon
     "ui_side_queue": ["#comfy-view-queue-button", "[title='Queue']", ".pi-list"], 
     "ui_side_assets": [
-        "[title='Assets']", 
+        "[title='Assets']",
+        "[aria-label='Assets']",
         ".pi-folder",                 // Common icon for assets
         "#comfyui-browser-button",    // ComfyUI-Browser
         ".comfy-assets-tab",
@@ -33,6 +34,7 @@ const CSS_BLOCK_MAP = {
     ],
     "ui_side_templates": [
         "[title='Templates']", 
+        "[aria-label='Templates']",
         ".pi-copy",                   // Common icon for templates
         "#node-templates-button",     // Node Templates
         ".comfy-templates-tab",
@@ -1744,42 +1746,78 @@ function showWorkflowDeniedToast(message) {
         existing.remove();
     }
 
-    const toast = document.createElement("div");
-    toast.id = "usgromana-workflow-denied-toast";
-    toast.style.position = "fixed";
-    toast.style.top = "30px";
-    toast.style.left = "50%";
-    toast.style.zIndex = "10001";
-    toast.style.maxWidth = "360px";
-    toast.style.padding = "12px 16px";
-    toast.style.borderRadius = "8px";
-    toast.style.background = "rgba(40, 40, 40, 0.95)";
-    toast.style.color = "#fff";
-    toast.style.fontSize = "13px";
-    toast.style.boxShadow = "0 8px 24px rgba(0,0,0,0.6)";
-    toast.style.border = "1px solid rgba(255,255,255,0.15)";
-    toast.style.display = "flex";
-    toast.style.alignItems = "flex-start";
-    toast.style.gap = "8px";
+const toast = document.createElement("div");
+toast.id = "usgromana-workflow-denied-toast";
 
-    toast.innerHTML = `
-    <div style="font-size:16px; line-height:1;">⛔</div>
+// --- Container Styling ---
+Object.assign(toast.style, {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "99999",
+    padding: "14px 18px",
+    maxWidth: "380px",
+    width: "calc(100% - 40px)",
+    borderRadius: "10px",
+    background: "rgba(30, 30, 30, 0.85)",
+    backdropFilter: "blur(6px)",
+    color: "#fff",
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "12px",
+    boxShadow: "0 6px 30px rgba(0,0,0,0.35)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    opacity: "0",
+    transition: "opacity 0.25s ease, transform 0.25s ease",
+});
+
+// --- Content ---
+toast.innerHTML = `
+    <div style="font-size:18px; line-height:1; margin-top:1px;">⛔</div>
     <div style="flex:1;">
-        <div style="font-weight:600; margin-bottom:2px;">Workflow action blocked</div>
-        <div>${message || "You are not allowed to save or delete workflows with this account."}</div>
+        <div style="font-weight:600; margin-bottom:3px; font-size:15px;">Action blocked</div>
+        <div style="opacity:0.9;">
+            ${message || "You are not allowed to save or delete workflows with this account."}
         </div>
-        <button style="
-            margin-left:8px;
-            background:transparent;
-            border:none;
-            color:#aaa;
-            cursor:pointer;
-            font-size:14px;
-        ">✕</button>
-    `;
+    </div>
 
-    const closeBtn = toast.querySelector("button");
-    closeBtn.onclick = () => toast.remove();
+    <button id="usgromana-toast-close" style="
+        background:rgba(255,255,255,0.08);
+        border:none;
+        width:24px;
+        height:24px;
+        border-radius:6px;
+        cursor:pointer;
+        font-size:13px;
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        transition:background 0.2s;
+    ">✕</button>
+`;
+
+// --- Hover effect on close button ---
+toast.querySelector("#usgromana-toast-close").onmouseover = () =>
+    toast.querySelector("#usgromana-toast-close").style.background =
+        "rgba(255,255,255,0.18)";
+toast.querySelector("#usgromana-toast-close").onmouseout = () =>
+    toast.querySelector("#usgromana-toast-close").style.background =
+        "rgba(255,255,255,0.08)";
+
+toast.querySelector("#usgromana-toast-close").onclick = () => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(-50%) translateY(-6px)";
+    setTimeout(() => toast.remove(), 220);
+};
+
+// --- Animate in ---
+setTimeout(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(-50%) translateY(0)";
+}, 20);
 
     document.body.appendChild(toast);
 
