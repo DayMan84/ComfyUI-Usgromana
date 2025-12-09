@@ -18,20 +18,24 @@ MODEL_FOLDER_NAME = "falconsai-nsfw-image-detection"
 
 # --- GLOBAL STATE (The Bridge) ---
 # This variable holds the username of the person who most recently
-# clicked "Queue Prompt". It bridges the Web Server and the Worker Thread.
+# queued a prompt. It bridges the Web Server and the Worker Thread.
 _LATEST_PROMPT_USER = "guest"
 
-def set_latest_prompt_user(username: str):
+def set_latest_prompt_user(username: str | None):
     """
-    Updates the global tracker when a prompt is received via HTTP.
+    Always update the worker-context username for the latest prompt.
+
+    If we don't know the user, store 'guest' so we don't keep an old
+    identity around from a previous request.
     """
     global _LATEST_PROMPT_USER
-    
-    # Update the global state so the worker thread knows who owns the job
-    _LATEST_PROMPT_USER = username
-    
-    # Debug log (Optional: comment out if too noisy)
-    # print(f"[Usgromana] 👤 User Context Switched to: {_LATEST_PROMPT_USER}")
+
+    effective = username or "guest"
+    _LATEST_PROMPT_USER = effective
+
+    # Debug so we can see it changing per prompt:
+    print(f"[Usgromana::NSFWGuard] set_latest_prompt_user → {effective!r}")
+
 
 @lru_cache(maxsize=1)
 def _get_nsfw_pipeline():
@@ -41,7 +45,7 @@ def _get_nsfw_pipeline():
     """
     base = folder_paths.base_path
     local_model_dir = os.path.join(base, "models", "nsfw_detector", MODEL_FOLDER_NAME)
-    
+
     # 1. Determine Model Source (Local vs Cloud)
     if os.path.exists(os.path.join(local_model_dir, "config.json")):
         model_source = local_model_dir
@@ -59,7 +63,7 @@ def _get_nsfw_pipeline():
         try:
             # Handle "cuda:0" vs just "cuda"
             pipe_device = int(device_str.split(":")[1]) if ":" in device_str else 0
-        except:
+        except Exception:
             pipe_device = 0
     elif "mps" in device_str:
         # Mac Silicon support
@@ -100,13 +104,39 @@ def _classify_image_path(path: str) -> Optional[Tuple[str, float]]:
     return label, score
 
 
+def _resolve_effective_username() -> str:
+    """
+    Decide which username to use for policy:
+
+    1. Try the ContextVar (HTTP request thread).
+    2. If that's empty or 'guest', fall back to _LATEST_PROMPT_USER (worker bridge).
+    3. If *everything* fails, use 'guest'.
+    """
+    global _LATEST_PROMPT_USER
+
+    try:
+        ctx_user = current_username_var.get(None)
+    except LookupError:
+        ctx_user = None
+
+    # Prefer a non-guest ContextVar user if present
+    if ctx_user and ctx_user != "guest":
+        username = ctx_user
+    elif _LATEST_PROMPT_USER:
+        username = _LATEST_PROMPT_USER
+    else:
+        username = "guest"
+
+    # Debug: see what the resolver is doing
+    print(
+        f"[Usgromana::NSFWGuard] DEBUG resolve_user: ctx={ctx_user!r} "
+        f"latest={_LATEST_PROMPT_USER!r} -> using={username!r}"
+    )
+
+    return username
+
+
 def is_sfw_enforced_for_current_session() -> bool:
-    """
-    Determines if SFW logic should apply.
-    1. Checks Web Context (current_username_var)
-    2. Checks Worker Context (_LATEST_PROMPT_USER)
-    3. Looks up 'sfw_check' in users.json
-    """
     # 1. Try ContextVar (Web Request Thread)
     try:
         username = current_username_var.get(None)
@@ -118,20 +148,14 @@ def is_sfw_enforced_for_current_session() -> bool:
         username = _LATEST_PROMPT_USER
 
     # 3. Check Database
-    sfw_flag = True # Default to BLOCK (True) if user is unknown/missing
-    
+    sfw_flag = True  # default BLOCK
     if username:
         _, rec = users_db.get_user(username)
         if rec is not None:
-            # This reads "sfw_check": false from your JSON
             sfw_flag = rec.get("sfw_check", True)
-            
-            # --- DEBUG LOG ---
-            # Remove this print once everything is working perfectly
             print(f"[Usgromana] 🛡️ Policy Check: User='{username}' | SFW={sfw_flag}")
         else:
-             print(f"[Usgromana] ⚠️ User '{username}' not found in DB. Defaulting to BLOCK.")
-    
+            print(f"[Usgromana] ⚠️ User '{username}' not found in DB. Defaulting to BLOCK.")
     return sfw_flag
 
 
@@ -143,18 +167,22 @@ def should_block_image_for_current_user(path: str) -> bool:
     if not is_sfw_enforced_for_current_session():
         # User is trusted (sfw_check: false), skip scanning
         return False
-        
+
     # 2. Check Image Content
     cls = _classify_image_path(path)
-    if cls is None: 
-        return False # Fail Open (Allow) if model broken
+    if cls is None:
+        # Fail open (allow) if model is broken
+        return False
 
     label, score = cls
 
     # 3. Decision (Threshold 0.5)
     if label == "nsfw" and score > 0.5:
-        print(f"[Usgromana::NSFWGuard] 🛑 BLOCKED NSFW file: {os.path.basename(path)} (Score: {score:.2f})")
+        print(
+            f"[Usgromana::NSFWGuard] 🛑 BLOCKED NSFW file: "
+            f"{os.path.basename(path)} (Score: {score:.2f})"
+        )
         return True
-    
+
     return False
 # --- END OF FILE utils/nsfw_guard.py ---
