@@ -346,6 +346,11 @@ This project follows a semantic-style versioning flow adapted for active develop
 
 ---
 
+## **v1.7.5 - Critical issue resolution
+### 🛠️ Admin workflow
+  - resolved an issue which barred admins from deleting default workflows
+  - resolved and issue with extension name causing UI block to fail
+
 ## **v1.7.0 - Updated extension logic & added sfw toggle
 ### 🛠️ Admin User group Extension list
   - Resolved an issue which caused duplicate extensions to be listed
