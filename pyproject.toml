@@ -1,5 +1,5 @@
 [project]
-name = "ComfyUI-Usgromana"
+name = "Usgromana"
 description = "The next-generation security, governance, permissions, and multi‑user login control system for ComfyUI. Extension implements login, multi-user registration, user group management, ui management, group workflow management, SFW user management, IP filtering, and user-specific input/output workflow directories, and more."
 version = "1.7.5"
 license = {file = "LICENSE"} 
