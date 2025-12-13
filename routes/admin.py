@@ -95,11 +95,123 @@ async def api_ip_lists(request):
 
 @routes.put("/usgromana/api/ip-lists")
 async def api_update_ip_lists(request):
-    if not is_admin(request): return web.json_response({"error": "Admin only"}, status=403)
+    if not is_admin(request): 
+        return web.json_response({"error": "Admin only"}, status=403)
     try:
         data = await request.json()
-        # logic to write to WHITELIST_FILE / BLACKLIST_FILE
-        # ... (Implement writing logic similar to previous version)
+        whitelist = data.get("whitelist", [])
+        blacklist = data.get("blacklist", [])
+        
+        # Validate and write whitelist
+        import ipaddress
+        
+        # Write whitelist
+        with open(WHITELIST_FILE, "w") as f:
+            for ip_entry in whitelist:
+                ip_entry = ip_entry.strip()
+                if ip_entry:
+                    try:
+                        # Validate IP or CIDR
+                        try:
+                            ipaddress.ip_address(ip_entry)
+                        except ValueError:
+                            ipaddress.ip_network(ip_entry, strict=False)
+                        f.write(ip_entry + "\n")
+                    except ValueError:
+                        # Skip invalid entries
+                        continue
+        
+        # Write blacklist
+        with open(BLACKLIST_FILE, "w") as f:
+            for ip_entry in blacklist:
+                ip_entry = ip_entry.strip()
+                if ip_entry:
+                    try:
+                        # Validate IP or CIDR
+                        try:
+                            ipaddress.ip_address(ip_entry)
+                        except ValueError:
+                            ipaddress.ip_network(ip_entry, strict=False)
+                        f.write(ip_entry + "\n")
+                    except ValueError:
+                        # Skip invalid entries
+                        continue
+        
+        # Reload the filter lists to update in-memory cache
+        ip_filter.load_filter_list()
+        
         return web.json_response({"status": "ok"})
     except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+@routes.post("/usgromana/api/nsfw-management")
+async def api_nsfw_management(request):
+    """Admin-only NSFW management endpoints."""
+    if not is_admin(request):
+        return web.json_response({"error": "Admin only"}, status=403)
+    
+    try:
+        data = await request.json()
+        action = data.get("action", "").strip()
+        
+        print(f"[Usgromana] NSFW management action: {action}")
+        
+        from ..utils.sfw_intercept.nsfw_guard import (
+            scan_all_images_in_output_directory,
+            fix_incorrectly_cached_tags,
+            clear_all_nsfw_tags
+        )
+        
+        # Run blocking operations in executor to avoid blocking the event loop
+        import asyncio
+        loop = asyncio.get_event_loop()
+        
+        if action == "scan_all":
+            force_rescan = bool(data.get("force_rescan", False))
+            print(f"[Usgromana] Starting scan_all (force_rescan={force_rescan}) in executor...")
+            result = await loop.run_in_executor(
+                None, 
+                scan_all_images_in_output_directory, 
+                force_rescan
+            )
+            print(f"[Usgromana] scan_all completed: {result}")
+            return web.json_response({
+                "status": "ok",
+                "message": f"Scanned {result['scanned']} images. Found {result['nsfw_found']} NSFW images.",
+                "stats": result
+            })
+        
+        elif action == "fix_incorrect":
+            print(f"[Usgromana] Starting fix_incorrect in executor...")
+            fixed_count = await loop.run_in_executor(
+                None,
+                fix_incorrectly_cached_tags
+            )
+            print(f"[Usgromana] fix_incorrect completed: {fixed_count} fixed")
+            return web.json_response({
+                "status": "ok",
+                "message": f"Fixed {fixed_count} incorrectly cached images.",
+                "fixed_count": fixed_count
+            })
+        
+        elif action == "clear_all_tags":
+            print(f"[Usgromana] Starting clear_all_tags in executor...")
+            cleared_count = await loop.run_in_executor(
+                None,
+                clear_all_nsfw_tags
+            )
+            print(f"[Usgromana] clear_all_tags completed: {cleared_count} cleared")
+            return web.json_response({
+                "status": "ok",
+                "message": f"Cleared NSFW tags from {cleared_count} images.",
+                "cleared_count": cleared_count
+            })
+        
+        else:
+            return web.json_response({"error": f"Unknown action: {action}"}, status=400)
+    
+    except Exception as e:
+        import traceback
+        print(f"[Usgromana] NSFW management error: {e}")
+        traceback.print_exc()
         return web.json_response({"error": str(e)}, status=500)

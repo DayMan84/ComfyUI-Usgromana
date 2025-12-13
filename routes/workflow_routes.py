@@ -308,6 +308,10 @@ async def middleware_dispatch(request):
     """
     path = request.path
     method = request.method
+    
+    # Don't intercept usgromana-gallery routes
+    if path.startswith("/usgromana-gallery"):
+        return None
 
     # Optional bypass
     if request.query.get("bypass") == "true":

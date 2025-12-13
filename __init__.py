@@ -21,7 +21,13 @@ from .utils.sfw_intercept.node_interceptor import install_node_interceptor
 import server
 
 WEB_DIRECTORY = "./web"
-__all__ = ["NODE_CLASS_MAPPINGS", "WEB_DIRECTORY"]
+
+# Export the public API for other extensions
+try:
+    from . import api
+    __all__ = ["NODE_CLASS_MAPPINGS", "WEB_DIRECTORY", "api"]
+except ImportError:
+    __all__ = ["NODE_CLASS_MAPPINGS", "WEB_DIRECTORY"]
 
 ensure_groups_config()
 
@@ -31,6 +37,7 @@ ensure_groups_config()
 async def workflow_interceptor_middleware(request, handler):
     path = request.path
     method = request.method
+    
 
     # 1. Dispatcher
     response = await workflow_routes.middleware_dispatch(request)
@@ -100,7 +107,7 @@ app.middlewares.append(
 # IMPORTANT: run JWT auth BEFORE we try to read request.user in workflow_interceptor
 app.middlewares.append(jwt_auth.create_jwt_middleware(
     public=("/login", "/logout", "/register"),
-    public_prefixes=("/usgromana", "/assets", "/static"),
+    public_prefixes=("/usgromana", "/usgromana-gallery", "/assets", "/static"),
 ))
 
 # Now that jwt_auth can populate request.user, we can safely
@@ -116,6 +123,22 @@ app.middlewares.append(access_control.create_usgromana_middleware())
 watcher.register(app)
 
 install_node_interceptor()
+
+# Ensure routes are added to the app
+# In ComfyUI, instance.routes should be automatically added by PromptServer,
+# but we'll explicitly add them to ensure they're registered
+from .globals import routes
+try:
+    # Check if routes are already in the app
+    routes_in_app = any(r._resource is routes for r in app.router.routes() if hasattr(r, '_resource'))
+    if not routes_in_app:
+        app.add_routes(routes)
+except Exception:
+    # Try to add anyway - might work even if check fails
+    try:
+        app.add_routes(routes)
+    except Exception:
+        pass  # ComfyUI may handle route registration automatically
 
 print("------------------------------------------")
 print("[Usgromana] Security System Initialized.")
