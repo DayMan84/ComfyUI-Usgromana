@@ -1,4 +1,0 @@
-aiohttp
-PyJWT
-bcrypt
-bleach
