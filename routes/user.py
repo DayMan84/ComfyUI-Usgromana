@@ -281,4 +281,77 @@ async def api_user_env(request: web.Request) -> web.Response:
 
     # --- UNKNOWN ACTION --------------------------------------------
     return web.json_response({"error": f"Unknown action '{action}'"}, status=400)
+
+
+@routes.post("/usgromana-gallery/mark-nsfw")
+async def mark_nsfw(request: web.Request) -> web.Response:
+    """
+    Manually mark an image as NSFW or SFW.
+    This endpoint allows gallery apps to review and flag images.
+    
+    Body (JSON):
+        {
+            "filename": "image.png",
+            "is_nsfw": true,
+            "score": 1.0,  # optional, default 1.0
+            "label": "manual"  # optional, default "manual"
+        }
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+    
+    filename = data.get("filename", "").strip()
+    if not filename:
+        return web.json_response({"error": "Missing 'filename'"}, status=400)
+    
+    # Validate filename is safe (no path traversal)
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return web.json_response({"error": "Invalid filename"}, status=400)
+    
+    # Get output directory and construct full path
+    output_dir = folder_paths.get_output_directory()
+    image_path = os.path.join(output_dir, filename)
+    
+    # If file not found at direct path, search recursively in output directory
+    if not os.path.exists(image_path):
+        found_path = None
+        for root, dirs, files in os.walk(output_dir):
+            if filename in files:
+                found_path = os.path.join(root, filename)
+                # Ensure found file is within output directory (security check)
+                if os.path.abspath(found_path).startswith(os.path.abspath(output_dir)):
+                    image_path = found_path
+                    break
+        
+        if not os.path.exists(image_path):
+            return web.json_response({"error": "File not found"}, status=404)
+    
+    # Final security check - ensure file is within output directory
+    if not os.path.abspath(image_path).startswith(os.path.abspath(output_dir)):
+        return web.json_response({"error": "Invalid file path"}, status=403)
+    
+    # Get NSFW flag (default to True if not provided)
+    is_nsfw = bool(data.get("is_nsfw", True))
+    score = float(data.get("score", 1.0))
+    label = str(data.get("label", "manual"))
+    
+    # Import and call the API function
+    try:
+        from ..api import set_image_nsfw_tag
+        success = set_image_nsfw_tag(image_path, is_nsfw, score, label)
+        
+        if success:
+            return web.json_response({
+                "status": "ok",
+                "message": f"Image marked as {'NSFW' if is_nsfw else 'SFW'}",
+                "filename": filename,
+                "is_nsfw": is_nsfw
+            })
+        else:
+            return web.json_response({"error": "Failed to set NSFW tag"}, status=500)
+    except Exception as e:
+        print(f"[Usgromana] Error in mark-nsfw endpoint: {e}")
+        return web.json_response({"error": str(e)}, status=500)
 # --- END OF FILE routes/user.py ---

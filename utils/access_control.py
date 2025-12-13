@@ -89,7 +89,7 @@ class AccessControl:
             path = request.path
             
             # 1. Public Whitelist
-            if (path.startswith(("/login", "/register", "/logout", "/usgromana", "/static", "/favicon", "/ws", "/assets")) or path == "/"):
+            if (path.startswith(("/login", "/register", "/logout", "/usgromana", "/usgromana-gallery", "/static", "/favicon", "/ws", "/assets")) or path == "/"):
                 return await handler(request)
             
             # 2. Core Extensions

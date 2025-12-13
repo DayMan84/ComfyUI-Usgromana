@@ -8,6 +8,10 @@
   <strong>The next-generation security, governance, permissions, and multi‑user control system for ComfyUI.</strong>
 </p>
 
+<p align="center">
+  <strong>Version 1.9.0</strong> — Latest release includes Extension Tabs API, IP filtering improvements, and performance optimizations
+</p>
+
 ---
 
 ## Table of Contents
@@ -22,9 +26,10 @@
 9. [IP Rules System](#ip-rules-system)  
 10. [User Environment Tools](#user-environment-tools)  
 11. [Settings Panel](#settings-panel)  
-12. [Backend Components](#backend-components)  
-13. [Troubleshooting](#troubleshooting)  
-14. [License](#license)
+12. [API Endpoints](#api-endpoints)  
+13. [Backend Components](#backend-components)  
+14. [Troubleshooting](#troubleshooting)  
+15. [License](#license)
 
 ---
 
@@ -41,6 +46,9 @@
 - A modern administrative panel with multiple tabs  
 - Dynamic theme integration with the ComfyUI dark mode  
 - Live UI popups, toast notifications, and visual enforcement  
+- **NSFW Guard API** - Public API for NSFW detection and enforcement
+- **Gallery integration** - Manual image flagging and metadata-based tagging
+- **Extension Tabs API** - Allow other extensions to add custom tabs to the admin panel
 
 It replaces the older Sentinel system with a faster, cleaner, more modular architecture—fully rewritten for reliability and future expansion.
 
@@ -114,6 +122,44 @@ A new middleware that detects:
 - Forbidden deletes  
 And triggers UI-side toast popups through a custom fetch wrapper.
 
+### 🛡️ **NSFW Guard API**
+A comprehensive public API that allows other ComfyUI extensions to:
+- Check user NSFW viewing permissions
+- Validate image tensors, PIL Images, or file paths for NSFW content
+- Integrate NSFW protection into custom nodes and extensions
+- **Metadata-based tagging system** - Images are tagged with NSFW metadata stored alongside files
+- **Gallery integration endpoint** - `/usgromana-gallery/mark-nsfw` for manual image flagging
+- **Automatic scanning** - Background scanning of output directory with caching
+- **Per-user enforcement** - SFW restrictions apply per-user based on role permissions
+
+See [API_USAGE.md](./API_USAGE.md) for complete documentation and examples.
+
+**Quick Example:**
+```python
+from api import check_tensor_nsfw, is_sfw_enforced_for_user
+
+# In your custom node
+if is_sfw_enforced_for_user():
+    if check_tensor_nsfw(image_tensor):
+        # Block or replace NSFW content
+        image_tensor = torch.zeros_like(image_tensor)
+```
+
+**Gallery Integration:**
+```javascript
+// Mark an image as NSFW from gallery UI
+fetch('/usgromana-gallery/mark-nsfw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        filename: 'image.png',
+        is_nsfw: true,
+        score: 1.0,
+        label: 'manual'
+    })
+});
+```
+
 ---
 
 ## Architecture
@@ -123,14 +169,26 @@ ComfyUI
 │
 ├── Usgromana Core
 │   ├── access_control.py    → RBAC, path blocking, folder isolation
-│   ├── usgromana.py         → Route setup, JWT, auth flows, settings API
-│   ├── watcher.py           → Intercepts 403 codes and triggers popups
+│   ├── __init__.py          → Route registration, middleware setup
+│   ├── api.py               → NSFW Guard API (public interface)
+│   ├── globals.py           → Shared server instances, route table
+│   ├── constants.py         → Configuration paths
+│   ├── routes/
+│   │   ├── auth.py          → Login/Register/Token endpoints
+│   │   ├── admin.py         → User & Group management, NSFW admin tools
+│   │   ├── user.py          → User environment, mark-nsfw endpoint
+│   │   ├── static.py        → Asset serving
+│   │   └── workflow_routes.py → Workflow protection, NSFW enforcement
 │   ├── utils/
 │   │   ├── ip_filter.py     → Whitelist/blacklist system
 │   │   ├── user_env.py      → User folder management
 │   │   ├── sanitizer.py     → Input scrubbing
 │   │   ├── logger.py        → Logging hooks
-│   │   └── timeout.py       → Rate limiting
+│   │   ├── timeout.py       → Rate limiting
+│   │   ├── sfw_intercept/
+│   │   │   ├── nsfw_guard.py → NSFW detection, metadata tagging
+│   │   │   └── node_interceptor.py → Node-level image interception
+│   │   └── reactor_sfw_intercept.py → ReActor SFW patch
 │   └── web/
 │       ├── js/usgromana_settings.js → UI enforcement + settings panel
 │       ├── css/usgromana.css        → Themed UI
@@ -161,18 +219,33 @@ ComfyUI/custom_nodes/Usgromana/
 ```
 Usgromana/
 │
-├── access_control.py
-├── usgromana.py
+├── __init__.py              → Main entry point, route registration
+├── api.py                   → NSFW Guard API (public interface)
+├── globals.py               → Shared server instances, route table
+├── constants.py             → Configuration paths
+├── access_control.py        → RBAC, path blocking, folder isolation
+│
+├── routes/
+│   ├── auth.py              → Login/Register/Token endpoints
+│   ├── admin.py             → User & Group management, NSFW admin tools
+│   ├── user.py              → User environment, mark-nsfw endpoint
+│   ├── static.py           → Asset serving
+│   └── workflow_routes.py   → Workflow protection, NSFW enforcement
 │
 ├── utils/
-│   ├── ip_filter.py
-│   ├── user_env.py
-│   ├── watcher.py
-│   └── sanitizer.py
+│   ├── ip_filter.py         → Whitelist/blacklist system
+│   ├── user_env.py          → User folder management
+│   ├── sanitizer.py         → Input scrubbing
+│   ├── logger.py            → Logging hooks
+│   ├── timeout.py           → Rate limiting
+│   ├── sfw_intercept/
+│   │   ├── nsfw_guard.py    → NSFW detection, metadata tagging
+│   │   └── node_interceptor.py → Node-level image interception
+│   └── reactor_sfw_intercept.py → ReActor SFW patch
 │
 ├── web/
-│   ├── js/usgromana_settings.js
-│   ├── css/usgromana.css
+│   ├── js/usgromana_settings.js → UI enforcement + settings panel
+│   ├── css/usgromana.css        → Themed UI
 │   └── assets/dark_logo_transparent.png
 │
 └── users/
@@ -274,7 +347,26 @@ Tabs:
 1. **Users & Roles**  
 2. **Permissions & UI**  
 3. **IP Rules**  
-4. **User Environment**
+4. **User Environment**  
+5. **NSFW Management**
+
+### Extension Tabs API
+
+Other ComfyUI extensions can register custom tabs in the Usgromana admin panel to manage their own permissions and settings. See [EXTENSION_TABS_API.md](./EXTENSION_TABS_API.md) for complete documentation.
+
+**Quick Example:**
+```javascript
+window.UsgromanaAdminTabs.register({
+    id: "myextension",
+    label: "My Extension",
+    order: 50,
+    render: async (container, context) => {
+        const { usersList, groupsConfig, currentUser } = context;
+        container.innerHTML = `<h3>My Extension Settings</h3>`;
+        // Render your content here
+    }
+});
+```
 
 ### Additional UI Features
 - Integrated logout button in the settings entry  
@@ -284,7 +376,86 @@ Tabs:
 
 ---
 
+## API Endpoints
+
+### NSFW Guard API (Public)
+The NSFW Guard API provides programmatic access to NSFW detection and enforcement. See [API_USAGE.md](./API_USAGE.md) for complete documentation.
+
+**Key Functions:**
+- `check_tensor_nsfw(images_tensor, threshold=0.5)` - Check image tensors
+- `check_image_path_nsfw(image_path, username=None)` - Check image files
+- `check_pil_image_nsfw(pil_image, threshold=0.5)` - Check PIL Images
+- `is_sfw_enforced_for_user(username=None)` - Check user restrictions
+- `set_image_nsfw_tag(image_path, is_nsfw, score=1.0, label="manual")` - Tag images
+- `get_image_nsfw_tag(image_path)` - Get existing tags
+
+### Gallery Integration Endpoint
+
+**POST `/usgromana-gallery/mark-nsfw`**
+Manually mark an image as NSFW or SFW. Designed for integration with gallery extensions.
+
+**Request Body:**
+```json
+{
+    "filename": "image.png",
+    "is_nsfw": true,
+    "score": 1.0,      // optional, default 1.0
+    "label": "manual"  // optional, default "manual"
+}
+```
+
+**Response:**
+```json
+{
+    "status": "ok",
+    "message": "Image marked as NSFW",
+    "filename": "image.png",
+    "is_nsfw": true
+}
+```
+
+**Features:**
+- Recursively searches output directory subdirectories
+- Security checks prevent path traversal
+- Integrates with metadata tagging system
+- Returns 404 if file not found, 403 for invalid paths
+
+### Authentication Endpoints
+
+**POST `/usgromana/api/login`** - User login  
+**POST `/usgromana/api/register`** - User registration  
+**POST `/usgromana/api/guest-login`** - Guest login  
+**POST `/usgromana/api/refresh-token`** - Token refresh
+
+### Admin Endpoints
+
+**GET/PUT `/usgromana/api/users`** - User management  
+**GET/PUT `/usgromana/api/groups`** - Group/permission management  
+**PUT `/usgromana/api/ip-lists`** - IP whitelist/blacklist  
+**POST `/usgromana/api/nsfw-management`** - NSFW admin tools (scan, fix, clear)
+
+### User Environment Endpoints
+
+**POST `/usgromana/api/user-env`** - User folder operations (purge, list, promote)
+
+### Extension Integration
+
+**Extension Tabs API** - JavaScript API for extensions to add custom tabs to the admin panel. See [EXTENSION_TABS_API.md](./EXTENSION_TABS_API.md) for complete documentation.
+
+---
+
 ## Backend Components
+
+### `__init__.py`
+- Main entry point for ComfyUI extension
+- Route registration and middleware setup
+- Server instance initialization
+
+### `api.py`
+- **NSFW Guard API** - Public interface for other extensions
+- Functions: `check_tensor_nsfw()`, `check_image_path_nsfw()`, `is_sfw_enforced_for_user()`
+- Metadata tagging: `set_image_nsfw_tag()`, `get_image_nsfw_tag()`
+- User context management for worker threads
 
 ### `access_control.py`
 - Folder isolation  
@@ -293,23 +464,53 @@ Tabs:
 - Workflow protection  
 - Extension gating  
 
-### `usgromana.py`
-- All routes `/usgromana/api/*`
-- JWT auth handling
-- Registration & login flows
-- Guest login
+### `routes/auth.py`
+- JWT authentication endpoints
+- Login, registration, token refresh
+- Guest login support
 
-### `watcher.py`
-- Intercepts 403s
-- Sends structured JS events
+### `routes/admin.py`
+- User & group management
+- Permission editing
+- NSFW management tools (scan, fix, clear)
+- IP rules management
 
-### `ip_filter.py`
+### `routes/user.py`
+- User environment operations
+- **Gallery integration**: `/usgromana-gallery/mark-nsfw` endpoint
+- File management (purge, list, promote workflows)
+
+### `routes/workflow_routes.py`
+- Workflow save/delete protection
+- Global NSFW enforcement on `/view` endpoint
+- Workflow listing and loading
+
+### `routes/static.py`
+- Asset serving (CSS, JS, images)
+- Logo and UI resources
+
+### `utils/sfw_intercept/nsfw_guard.py`
+- NSFW detection using AI models
+- Metadata-based tagging system
+- Background scanning and caching
+- Per-user enforcement logic
+
+### `utils/sfw_intercept/node_interceptor.py`
+- Node-level image interception
+- Real-time NSFW blocking in custom nodes
+
+### `utils/reactor_sfw_intercept.py`
+- ReActor extension SFW patch
+- Per-user SFW enforcement for face swap operations
+
+### `utils/ip_filter.py`
 - Whitelist & blacklist logic
 - Persistent storage
 
-### `user_env.py`
+### `utils/user_env.py`
 - Folder operations
 - Metadata tools
+- User file management
 
 ---
 
@@ -331,6 +532,21 @@ can_run = true
 ```
 in `usgromana_groups.json`.
 
+### mark-nsfw endpoint returns 404
+- Ensure the image file exists in the output directory or subdirectories
+- Check that the filename doesn't contain path traversal characters (`..`, `/`, `\`)
+- Verify the file is within the output directory (security check)
+
+### NSFW Guard API not working
+- Ensure `ComfyUI-Usgromana` is loaded before your extension
+- Check that the API is available: `from api import is_available; print(is_available())`
+- Verify user context is set in worker threads using `set_user_context()`
+
+### NSFW tags not persisting
+- Check that metadata files (`.nsfw_metadata.json`) are being created alongside images
+- Verify write permissions in the output directory
+- Ensure metadata files aren't being deleted by cleanup scripts
+
 ---
 
 ## License
@@ -346,7 +562,48 @@ This project follows a semantic-style versioning flow adapted for active develop
 
 ---
 
-## **v1.7.5 - Critical issue resolution
+## **v1.8.0 — NSFW Guard API & Gallery Integration (2025-12-12)**
+### 🛡️ NSFW Guard API Enhancements
+- **Metadata-based tagging system** 
+  - Images are now tagged with NSFW metadata stored alongside files (`.nsfw_metadata.json`)
+- **Gallery integration endpoint** 
+  - New `/usgromana-gallery/mark-nsfw` endpoint for manual image flagging from gallery UIs
+- **Recursive file search** 
+  - mark-nsfw endpoint now searches subdirectories to find images
+- **Enhanced API functions** 
+  - Added `set_image_nsfw_tag()` for programmatic tagging
+- **Background scanning** 
+  - Automatic scanning of output directory with intelligent caching
+- **Per-user enforcement** 
+  - SFW restrictions apply per-user based on role permissions
+
+### 🔗 Gallery Integration
+- **ComfyUI-Usgromana-Gallery compatibility** 
+  - Full integration with gallery extension
+- **Manual flagging** 
+  - Users can manually mark images as NSFW/SFW through gallery UI
+- **Metadata persistence** 
+  - NSFW tags persist across server restarts via metadata files
+
+### 🛠️ Route Registration Improvements
+- **Explicit route registration** 
+  - Routes are now explicitly registered to ensure availability
+- **Middleware whitelisting** 
+  - Gallery routes are properly whitelisted in workflow middleware
+- **Route verification** 
+  - Startup verification ensures all routes are properly registered
+
+### 📂 Architecture Updates
+- **Modular route structure** 
+  - Routes organized into dedicated modules (`routes/` directory)
+- **Separation of concerns** 
+  - NSFW logic separated into `utils/sfw_intercept/` module
+- **Public API module** 
+  - `api.py` provides clean public interface for other extensions
+
+---
+
+## **v1.7.5 - Critical issue resolution**
 ### 🛠️ Admin workflow
   - resolved an issue which barred admins from deleting default workflows
   - resolved and issue with extension name causing UI block to fail

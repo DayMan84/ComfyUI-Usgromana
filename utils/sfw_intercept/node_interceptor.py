@@ -17,7 +17,8 @@ SCORE_THRESHOLD = 0.50
 # ----------------------------------------------------------------------------
 def check_tensor_nsfw(images_tensor):
     # 1. CHECK USER PERMISSIONS FIRST
-    if not is_sfw_enforced_for_current_session():
+    # Use quiet mode to reduce logging during node execution
+    if not is_sfw_enforced_for_current_session(quiet=True):
         # print("[Usgromana] 🛡️ SFW Disabled for this user. Bypassing scan.")
         return False
 

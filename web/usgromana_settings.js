@@ -6,6 +6,113 @@ const GROUPS = ["admin", "power", "user", "guest"];
 let currentUser = null;
 let groupsConfig = {};
 
+// --- Extension Tab Registry API ---
+/**
+ * Registry for extension tabs in the Usgromana admin panel.
+ * Extensions can register custom tabs to manage their own permissions or settings.
+ */
+window.UsgromanaAdminTabs = {
+    _tabs: [],
+    _defaultOrder: ["users", "perms", "ip", "env", "nsfw"],
+    
+    /**
+     * Register a new tab in the admin panel.
+     * @param {Object} config - Tab configuration
+     * @param {string} config.id - Unique tab identifier (alphanumeric, lowercase, no spaces)
+     * @param {string} config.label - Display name for the tab
+     * @param {Function} config.render - Async function that renders the tab content
+     *   @param {HTMLElement} container - The container element to render into
+     *   @param {Object} context - Context object with available data
+     *   @param {Array} context.usersList - List of all users
+     *   @param {Object} context.groupsConfig - Groups configuration object
+     *   @param {Object} context.currentUser - Current logged-in user object
+     * @param {number} [config.order] - Optional order/position (lower numbers appear first, default: 100)
+     * @param {string} [config.icon] - Optional icon class or text (not currently used, reserved for future)
+     * @returns {boolean} - True if registration was successful, false if ID already exists
+     * 
+     * @example
+     * window.UsgromanaAdminTabs.register({
+     *   id: "myextension",
+     *   label: "My Extension",
+     *   order: 50,
+     *   render: async (container, context) => {
+     *     container.innerHTML = `<h3>My Extension Settings</h3>`;
+     *     // Render your content here
+     *   }
+     * });
+     */
+    register(config) {
+        if (!config || !config.id || !config.label || !config.render) {
+            console.error("[Usgromana] Tab registration failed: missing required fields (id, label, render)");
+            return false;
+        }
+        
+        // Validate ID format
+        if (!/^[a-z0-9_-]+$/.test(config.id)) {
+            console.error("[Usgromana] Tab registration failed: id must be lowercase alphanumeric with underscores/hyphens only");
+            return false;
+        }
+        
+        // Check for duplicate IDs
+        if (this._tabs.some(t => t.id === config.id)) {
+            console.warn(`[Usgromana] Tab with id "${config.id}" already registered, skipping`);
+            return false;
+        }
+        
+        // Check for conflicts with built-in tabs
+        if (this._defaultOrder.includes(config.id)) {
+            console.error(`[Usgromana] Tab registration failed: id "${config.id}" conflicts with built-in tab`);
+            return false;
+        }
+        
+        const tab = {
+            id: config.id,
+            label: config.label,
+            render: config.render,
+            order: config.order !== undefined ? config.order : 100,
+            icon: config.icon || null
+        };
+        
+        this._tabs.push(tab);
+        // Sort by order
+        this._tabs.sort((a, b) => a.order - b.order);
+        
+        console.log(`[Usgromana] Registered extension tab: "${config.id}" (${config.label})`);
+        return true;
+    },
+    
+    /**
+     * Unregister a tab by ID.
+     * @param {string} id - Tab identifier to remove
+     * @returns {boolean} - True if tab was found and removed
+     */
+    unregister(id) {
+        const index = this._tabs.findIndex(t => t.id === id);
+        if (index !== -1) {
+            this._tabs.splice(index, 1);
+            console.log(`[Usgromana] Unregistered extension tab: "${id}"`);
+            return true;
+        }
+        return false;
+    },
+    
+    /**
+     * Get all registered extension tabs.
+     * @returns {Array} - Array of tab configurations
+     */
+    getAll() {
+        return [...this._tabs];
+    },
+    
+    /**
+     * Clear all registered extension tabs.
+     */
+    clear() {
+        this._tabs = [];
+        console.log("[Usgromana] Cleared all extension tabs");
+    }
+};
+
 // Backend API endpoints (adjust if your backend uses different paths)
 const IP_API_ENDPOINT = "/usgromana/api/ip-lists";
 const USER_ENV_API_ENDPOINT = "/usgromana/api/user-env";
@@ -116,6 +223,10 @@ const CSS_BLOCK_MAP = {
     "settings_maskeditor": [
         "li[aria-label='Mask Editor']",
         "li.p-listbox-option[aria-label='Mask Editor']"
+    ],
+    "settings_usgromanasettings": [
+        "li[aria-label='Usgromana']",
+        "li.p-listbox-option[aria-label='Usgromana']"
     ],
 
     // iTools
@@ -551,6 +662,14 @@ function getSanitizedId(text) {
     return "settings_" + text.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // --- 3. ADMIN DIALOG CLASS ---
 class usgromanaDialog extends ComfyDialog {
     constructor() {
@@ -587,23 +706,50 @@ class usgromanaDialog extends ComfyDialog {
             return;
         }
 
+        // Get extension tabs
+        const extensionTabs = window.UsgromanaAdminTabs.getAll();
+        
+        // Build tabs HTML (built-in tabs first, then extension tabs)
+        const builtInTabs = [
+            { id: "users", label: "Users & Roles", order: 0 },
+            { id: "perms", label: "Permissions & UI", order: 1 },
+            { id: "ip", label: "IP Rules", order: 2 },
+            { id: "env", label: "User Env", order: 3 },
+            { id: "nsfw", label: "NSFW Management", order: 4 }
+        ];
+        
+        // Combine and sort all tabs
+        const allTabs = [...builtInTabs, ...extensionTabs.map(t => ({ id: t.id, label: t.label, order: t.order }))];
+        allTabs.sort((a, b) => a.order - b.order);
+        
+        // Build tabs HTML - mark "users" tab as active (first built-in tab)
+        // Escape tab.label to prevent XSS (tab.id is already validated during registration)
+        const tabsHTML = allTabs.map((tab, index) => {
+            const isActive = tab.id === "users" || (index === 0 && !builtInTabs.some(bt => bt.id === tab.id));
+            // ID is validated during registration (lowercase alphanumeric + underscore/hyphen), safe for HTML attributes
+            // Label needs escaping as it's user-provided text
+            const escapedLabel = escapeHtml(tab.label);
+            return `<div class="usgromana-tab${isActive ? ' active' : ''}" data-tab="${tab.id}">${escapedLabel}</div>`;
+        }).join("");
+        
+        // Build content containers HTML - mark "users" content as active
+        // tab.id is already validated during registration (lowercase alphanumeric + underscore/hyphen)
+        const contentHTML = allTabs.map((tab, index) => {
+            const isActive = tab.id === "users" || (index === 0 && !builtInTabs.some(bt => bt.id === tab.id));
+            return `<div class="usgromana-content${isActive ? ' active' : ''}" id="usgromana-tab-${tab.id}"></div>`;
+        }).join("");
+        
         // Render Layout
         this.element.innerHTML = `
             <div class="usgromana-modal-header">
-                <span class="usgromana-modal-title">usgromana Security Policy</span>
+                <span class="usgromana-modal-title">Usgromana Security Policy</span>
                 <button class="usgromana-modal-close">✕</button>
             </div>
             <div class="usgromana-modal-body">
                 <div class="usgromana-tabs">
-                    <div class="usgromana-tab active" data-tab="users">Users & Roles</div>
-                    <div class="usgromana-tab" data-tab="perms">Permissions & UI</div>
-                    <div class="usgromana-tab" data-tab="ip">IP Rules</div>
-                    <div class="usgromana-tab" data-tab="env">User Env</div>
+                    ${tabsHTML}
                 </div>
-                <div class="usgromana-content active" id="usgromana-tab-users"></div>
-                <div class="usgromana-content" id="usgromana-tab-perms"></div>
-                <div class="usgromana-content" id="usgromana-tab-ip"></div>
-                <div class="usgromana-content" id="usgromana-tab-env"></div>
+                ${contentHTML}
             </div>
         `;
 
@@ -616,14 +762,62 @@ class usgromanaDialog extends ComfyDialog {
             tabs.forEach(x => x.classList.remove("active"));
             this.element.querySelectorAll(".usgromana-content").forEach(c => c.classList.remove("active"));
             t.classList.add("active");
-            this.element.querySelector(`#usgromana-tab-${t.dataset.tab}`).classList.add("active");
+            
+            // Validate tab ID before using in querySelector to prevent injection
+            const tabId = t.dataset.tab;
+            if (tabId && /^[a-z0-9_-]+$/.test(tabId)) {
+                const contentEl = this.element.querySelector(`#usgromana-tab-${tabId}`);
+                if (contentEl) {
+                    contentEl.classList.add("active");
+                }
+            }
         });
 
-        // Fill Data
+        // Fill Data - Built-in tabs
         this.renderUsers(usersList, this.element.querySelector("#usgromana-tab-users"));
         this.renderPerms(this.element.querySelector("#usgromana-tab-perms"));
         await this.renderIpRules(this.element.querySelector("#usgromana-tab-ip"));
         this.renderUserEnv(this.element.querySelector("#usgromana-tab-env"), usersList);
+        this.renderNsfwManagement(this.element.querySelector("#usgromana-tab-nsfw"));
+        
+        // Fill Data - Extension tabs
+        const context = {
+            usersList,
+            groupsConfig,
+            currentUser
+        };
+        
+        for (const extTab of extensionTabs) {
+            // Validate tab ID before using in querySelector (double-check, already validated during registration)
+            if (!/^[a-z0-9_-]+$/.test(extTab.id)) {
+                console.error(`[Usgromana] Invalid tab ID format: "${extTab.id}", skipping render`);
+                continue;
+            }
+            
+            const container = this.element.querySelector(`#usgromana-tab-${extTab.id}`);
+            if (container) {
+                try {
+                    // Show loading state
+                    container.innerHTML = `<div style="padding:20px; text-align:center; color:#c5c8d3;">Loading...</div>`;
+                    // Render extension tab content
+                    await extTab.render(container, context);
+                } catch (error) {
+                    console.error(`[Usgromana] Error rendering extension tab "${extTab.id}":`, error);
+                    // Escape error message to prevent XSS
+                    const errorMsg = String(error.message || "Unknown error").replace(/[<>]/g, "");
+                    const escapedLabel = escapeHtml(extTab.label);
+                    container.innerHTML = `
+                        <div style="padding:20px; text-align:center; color:#ff6b6b;">
+                            <h3>Error Loading Tab</h3>
+                            <p>Failed to render "${escapedLabel}" tab.</p>
+                            <p style="font-size:11px; color:#c5c8d3;">${errorMsg}</p>
+                        </div>
+                    `;
+                }
+            } else {
+                console.warn(`[Usgromana] Container not found for extension tab: "${extTab.id}"`);
+            }
+        }
     }
 
     close() { this.overlay.remove(); }
@@ -808,8 +1002,8 @@ renderUsers(list, container) {
 
         async function loadIpConfig() {
             const data = await getData(IP_API_ENDPOINT);
-            const whitelist = (data?.whitelist || []).join("\\n");
-            const blacklist = (data?.blacklist || []).join("\\n");
+            const whitelist = (data?.whitelist || []).join("\n");
+            const blacklist = (data?.blacklist || []).join("\n");
             wlEl.value = whitelist;
             blEl.value = blacklist;
         }
@@ -820,11 +1014,11 @@ renderUsers(list, container) {
 
         saveBtn.onclick = async () => {
             const whitelist = wlEl.value
-                .split(/\\r?\\n/)
+                .split(/\r?\n/)
                 .map(l => l.trim())
                 .filter(l => l.length > 0);
             const blacklist = blEl.value
-                .split(/\\r?\\n/)
+                .split(/\r?\n/)
                 .map(l => l.trim())
                 .filter(l => l.length > 0);
 
@@ -1221,6 +1415,113 @@ renderUserEnv(container, usersList) {
     }
 }
 
+renderNsfwManagement(container) {
+    container.innerHTML = `
+        <div class="usgromana-section">
+            <h3>NSFW Content Management</h3>
+            <p>
+                Manage NSFW detection and scanning for images in the output directory.
+                Use these tools to scan, fix, or clear NSFW tags from images.
+            </p>
+
+            <div class="usgromana-row" style="margin-top:16px; gap:8px; flex-wrap:wrap;">
+                <button class="usgromana-btn" id="usgromana-nsfw-scan-new">
+                    Scan New Images
+                </button>
+                <button class="usgromana-btn" id="usgromana-nsfw-scan-all">
+                    Force Rescan All Images
+                </button>
+                <button class="usgromana-btn secondary" id="usgromana-nsfw-fix">
+                    Fix Incorrect Tags
+                </button>
+                <button class="usgromana-btn danger" id="usgromana-nsfw-clear">
+                    Clear All Tags
+                </button>
+            </div>
+
+            <div style="margin-top:12px;">
+                <label class="usgromana-field-label">Operation Status / Results</label>
+                <textarea id="usgromana-nsfw-output" class="usgromana-textarea" readonly style="min-height:120px;"></textarea>
+            </div>
+
+            <div style="margin-top:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:6px;">
+                <h4 style="margin:0 0 8px 0; font-size:14px;">About NSFW Scanning</h4>
+                <ul style="margin:0; padding-left:20px; font-size:13px; opacity:0.9;">
+                    <li><strong>Scan New Images:</strong> Only scans images that don't have NSFW tags yet.</li>
+                    <li><strong>Force Rescan All:</strong> Clears all tags and rescans every image (slow, but thorough).</li>
+                    <li><strong>Fix Incorrect Tags:</strong> Removes tags from images incorrectly marked as NSFW.</li>
+                    <li><strong>Clear All Tags:</strong> Removes all NSFW metadata from images (forces rescan on next access).</li>
+                </ul>
+            </div>
+        </div>
+    `;
+
+    const scanNewBtn = container.querySelector("#usgromana-nsfw-scan-new");
+    const scanAllBtn = container.querySelector("#usgromana-nsfw-scan-all");
+    const fixBtn = container.querySelector("#usgromana-nsfw-fix");
+    const clearBtn = container.querySelector("#usgromana-nsfw-clear");
+    const output = container.querySelector("#usgromana-nsfw-output");
+
+    async function executeAction(action, params = {}) {
+        const btnMap = {
+            "scan_all": scanAllBtn,
+            "fix_incorrect": fixBtn,
+            "clear_all_tags": clearBtn
+        };
+        const btn = btnMap[action] || scanNewBtn;
+        
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+        output.value = `Executing ${action}...\n`;
+
+        try {
+            const body = { action, ...params };
+            if (action === "scan_all") {
+                body.force_rescan = false;
+            }
+            
+            const res = await api.fetchApi("/usgromana/api/nsfw-management", {
+                method: "POST",
+                body: JSON.stringify(body),
+            });
+
+            if (res.status === 200) {
+                const data = await res.json();
+                output.value = data.message || "Operation completed successfully.";
+                if (data.stats) {
+                    output.value += `\n\nStats:\n`;
+                    output.value += `  - Scanned: ${data.stats.scanned || 0}\n`;
+                    output.value += `  - NSFW Found: ${data.stats.nsfw_found || 0}\n`;
+                    output.value += `  - Errors: ${data.stats.errors || 0}\n`;
+                    output.value += `  - Total Images: ${data.stats.total_images || 0}`;
+                }
+                if (data.fixed_count !== undefined) {
+                    output.value += `\n\nFixed ${data.fixed_count} images.`;
+                }
+            } else {
+                const error = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                output.value = `Error: ${error.error || `HTTP ${res.status}`}`;
+            }
+        } catch (e) {
+            console.error("[usgromana] NSFW management error:", e);
+            output.value = `Error: ${e.message || "See console for details."}`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    scanNewBtn.onclick = () => executeAction("scan_all", { force_rescan: false });
+    scanAllBtn.onclick = () => executeAction("scan_all", { force_rescan: true });
+    fixBtn.onclick = () => executeAction("fix_incorrect");
+    clearBtn.onclick = () => {
+        if (window.confirm("Are you sure you want to clear ALL NSFW tags from all images? This cannot be undone.")) {
+            executeAction("clear_all_tags");
+        }
+    };
+}
+
     renderPerms(container) {
         // --- SCANNER: Find all Settings Categories ---
         const categories = new Set();
@@ -1247,8 +1548,8 @@ renderUserEnv(container, usersList) {
         ].forEach(c => categories.add(c));
         
         // Clean exclusions
-        categories.delete("usgromana"); 
-        categories.delete("usgromana.Configuration");
+        categories.delete("Usgromana"); 
+        categories.delete("Usgromana.Configuration");
         const sortedCats = Array.from(categories).sort();
 
         // IDs that are already explicitly defined in Sections 1 & 2
@@ -1313,7 +1614,7 @@ renderUserEnv(container, usersList) {
         //  Section 3: Settings Menu Options
         html += drawRow("Settings Menu", null, true);
         html += drawRow("Settings Menu: User", "settings_user");
-        html += drawRow("Settings Menu: usgromana", "settings_usgromanasettings");
+        html += drawRow("Settings Menu: Usgromana", "settings_usgromanasettings");
         html += drawRow("Settings Menu: Mask Editor", "settings_maskeditor");
         html += drawRow("Settings Menu: Keybinding", "settings_keybinding");
         html += drawRow("Settings Menu: Appearance", "settings_makadiappearance");
@@ -1396,12 +1697,12 @@ async function updateEnforcementStyles() {
     if (role === "guest") {
         const guestCfg = groupsConfig["guest"] || {};
 
-        //console.log("[usgromana] enforcement (guest):", {
-         //   role,
-          //  guestCfgKeys: Object.keys(guestCfg)
-        //});
-
         for (const [key, selectors] of Object.entries(CSS_BLOCK_MAP)) {
+            // Always allow usgromana settings menu and logout for guests
+            if (key === "settings_usgromanasettings" || key === "settings_Usgromanasettings") {
+                continue; // Skip blocking this menu item
+            }
+            
             const allowed = guestCfg[key] === true; // only explicit true is allowed
             if (!allowed) {
                 css +=
@@ -1411,6 +1712,9 @@ async function updateEnforcementStyles() {
         }
 
         css += `.usgromana-blocked-item { display: none !important; }`;
+        // Always show logout button and usgromana menu - never hide them for guests
+        css += `#usgromana-settings-logout-btn, [data-usgromana-always-visible="true"] { display: block !important; visibility: visible !important; opacity: 1 !important; }`;
+        css += `li[aria-label='usgromana'], li[aria-label='Usgromana'], li.p-listbox-option[aria-label='usgromana'], li.p-listbox-option[aria-label='Usgromana'] { display: block !important; visibility: visible !important; opacity: 1 !important; }`;
 
         let styleTag = document.getElementById("usgromana-css-block");
         if (!styleTag) {
@@ -1423,6 +1727,16 @@ async function updateEnforcementStyles() {
         enforceSidebar(guestCfg, role);
         enforceMenus(guestCfg, role);
         patchSaveConfirmDialog(guestCfg, role);
+        
+        // Ensure logout button is always visible for guests
+        const logoutBtn = document.getElementById("usgromana-settings-logout-btn");
+        if (logoutBtn) {
+            logoutBtn.style.display = "block";
+            logoutBtn.style.visibility = "visible";
+            logoutBtn.style.opacity = "1";
+            logoutBtn.classList.remove("usgromana-blocked-item");
+        }
+        
         return;
     }
 
@@ -1455,6 +1769,8 @@ async function updateEnforcementStyles() {
     }
 
     css += `.usgromana-blocked-item { display: none !important; }`;
+    // Always show logout button - never hide it for any user
+    css += `#usgromana-settings-logout-btn, [data-usgromana-always-visible="true"] { display: block !important; visibility: visible !important; opacity: 1 !important; }`;
 
     // Apply to Head
     let styleTag = document.getElementById("usgromana-css-block");
@@ -1469,6 +1785,15 @@ async function updateEnforcementStyles() {
     enforceSidebar(cfg, role);
     enforceMenus(cfg, role);
     patchSaveConfirmDialog(cfg, role);
+    
+    // Ensure logout button is always visible
+    const logoutBtn = document.getElementById("usgromana-settings-logout-btn");
+    if (logoutBtn) {
+        logoutBtn.style.display = "block";
+        logoutBtn.style.visibility = "visible";
+        logoutBtn.style.opacity = "1";
+        logoutBtn.classList.remove("usgromana-blocked-item");
+    }
 }
 
 // Sidebar Scanner: Runs periodically to hide settings menu buttons by text content
@@ -1481,12 +1806,36 @@ function enforceSidebar(cfg, role) {
     );
 
     items.forEach(el => {
+        // Never hide the logout button - it should always be visible
+        if (el.id === "usgromana-settings-logout-btn" || 
+            el.innerText?.includes("Logout current user") ||
+            el.querySelector("#usgromana-settings-logout-btn")) {
+            el.classList.remove("usgromana-blocked-item");
+            el.style.display = "";
+            return;
+        }
+        
+        // Never hide the usgromana menu item - guests need it to logout
+        const ariaLabel = el.getAttribute('aria-label');
+        if (ariaLabel && (ariaLabel.toLowerCase() === 'usgromana' || ariaLabel === 'Usgromana')) {
+            el.classList.remove("usgromana-blocked-item");
+            el.style.display = "";
+            return;
+        }
+        
         const txt = (el.innerText || "").trim();
         if (!txt || txt.length > 30 || txt === "Close" || txt === "Back") return;
 
         const catId = getSanitizedId(txt);
 
         let val = cfg[catId];
+        
+        // Always allow usgromana menu for guests
+        if (catId === "usgromanasettings" || catId === "Usgromana" || txt.toLowerCase() === "Usgromana") {
+            el.classList.remove("usgromana-blocked-item");
+            el.style.display = "";
+            return;
+        }
 
         // Default logic:
         //  - guest: undefined = BLOCK
@@ -1919,8 +2268,18 @@ window.addEventListener("keydown", (ev) => {
 
 // --- 5. INITIALIZATION ---
 
+// Import logout functionality to ensure it loads
+import("/usgromana/js/logout.js").catch(err => {
+    console.error("[Usgromana] Failed to load logout.js:", err);
+    // Fallback: try to load it directly
+    const script = document.createElement("script");
+    script.src = "/usgromana/js/logout.js";
+    script.type = "module";
+    document.head.appendChild(script);
+});
+
 app.registerExtension({
-    name: "usgromana.Settings",
+    name: "Usgromana.Settings",
     async setup() {
         const style = document.createElement("style");
         style.innerHTML = ADMIN_STYLES;
@@ -1932,21 +2291,59 @@ app.registerExtension({
         // Immediate Enforcement
         setTimeout(updateEnforcementStyles, 500);
 
+        // Cache DOM queries to avoid repeated lookups
+        let cachedModal = null;
+        let cachedLogoutBtn = null;
+        let cachedMenuItems = null;
+        let lastMenuCheck = 0;
+        const MENU_CACHE_DURATION = 2000; // Cache menu items for 2 seconds
+
         // Continuous Enforcement (for late loading extensions & settings modal opening)
-        setInterval(() => {
+        const enforcementInterval = setInterval(() => {
             if (!currentUser || !groupsConfig) return;
 
             const role = currentUser.role || "user";
             const cfg = groupsConfig[role] || {};
 
-            // Settings modal
-            if (document.querySelector(".comfy-modal")) {
+            // Cache modal query - only update if needed
+            const now = Date.now();
+            if (!cachedModal || !cachedModal.isConnected) {
+                cachedModal = document.querySelector(".comfy-modal");
+            }
+
+            // Settings modal - only run expensive operations when modal is open
+            if (cachedModal) {
                 enforceSidebar(cfg, role);
             }
 
             // Menus & save-confirm popup
             enforceMenus(cfg, role);
             patchSaveConfirmDialog(cfg, role);
+            
+            // Ensure logout button is always visible for all users - cache the query
+            if (!cachedLogoutBtn || !cachedLogoutBtn.isConnected) {
+                cachedLogoutBtn = document.getElementById("usgromana-settings-logout-btn");
+            }
+            if (cachedLogoutBtn) {
+                cachedLogoutBtn.style.display = "block";
+                cachedLogoutBtn.style.visibility = "visible";
+                cachedLogoutBtn.style.opacity = "1";
+                cachedLogoutBtn.classList.remove("usgromana-blocked-item");
+            }
+            
+            // Ensure usgromana menu item is always visible - cache query results
+            if (now - lastMenuCheck > MENU_CACHE_DURATION || !cachedMenuItems || cachedMenuItems.length === 0) {
+                cachedMenuItems = document.querySelectorAll('li[aria-label="Usgromana"], li.p-listbox-option[aria-label="Usgromana"]');
+                lastMenuCheck = now;
+            }
+            cachedMenuItems.forEach(item => {
+                if (item.isConnected) {
+                    item.style.display = "block";
+                    item.style.visibility = "visible";
+                    item.style.opacity = "1";
+                    item.classList.remove("usgromana-blocked-item");
+                }
+            });
 
             // If CSS block was nuked, rebuild it
             if (!document.getElementById("usgromana-css-block")) {
@@ -1954,9 +2351,12 @@ app.registerExtension({
             }
         }, 1000);
 
-        // Register "Manage usgromana" Button in Settings
+        // Store interval ID for potential cleanup (though this extension typically lives for the page lifetime)
+        window._usgromanaEnforcementInterval = enforcementInterval;
+
+        // Register "Manage Usgromana" Button in Settings
 app.ui.settings.addSetting({
-    id: "usgromana.Configuration",
+    id: "Usgromana.Configuration",
     name: "Usgromana",
     type: () => {
         const wrapper = document.createElement("div");
@@ -1964,12 +2364,17 @@ app.ui.settings.addSetting({
         wrapper.style.flexDirection = "column";
         wrapper.style.gap = "6px";
 
-        // Logout button (above)
+        // Logout button (above) - ALWAYS visible for all users including guests
         const logoutBtn = document.createElement("button");
         logoutBtn.innerText = "Logout current user";
         logoutBtn.className = "usgromana-launch-btn";
         logoutBtn.style.background = "#7a2525";
         logoutBtn.style.borderColor = "#aa3a3a";
+        logoutBtn.id = "usgromana-settings-logout-btn";
+        // Ensure logout button is never hidden by enforcement
+        logoutBtn.setAttribute('data-usgromana-always-visible', 'true');
+        logoutBtn.style.display = "block"; // Force display
+        
         logoutBtn.onclick = () => {
             // Hard redirect so cookies + state reset properly
             window.location.href = "/logout";
@@ -1977,7 +2382,7 @@ app.ui.settings.addSetting({
 
         // Main management button
         const btn = document.createElement("button");
-        btn.innerText = "Manage usgromana Permissions";
+        btn.innerText = "Manage Usgromana Permissions";
         btn.className = "usgromana-launch-btn";
         btn.onclick = () => new usgromanaDialog().show();
 
@@ -1994,9 +2399,10 @@ app.ui.settings.addSetting({
                 }
             }
         }, 100);
-
+        
         return wrapper;
     }
 });
+
     }
 });
