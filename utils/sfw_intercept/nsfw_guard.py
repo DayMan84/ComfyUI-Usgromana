@@ -192,9 +192,12 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
         if ext in ('.png',):
             # Read existing PNG info or create new
             pnginfo = PngImagePlugin.PngInfo()
-            # Copy existing text chunks (preserve existing metadata)
+            # Copy ALL existing text chunks (preserve existing metadata)
+            # Exclude only the NSFW-related keys we're about to overwrite
+            nsfw_keys_to_exclude = {NSFW_METADATA_KEY, NSFW_SCORE_KEY, NSFW_LABEL_KEY, "Keywords", "Subject", "Comment"}
             for key, value in img.info.items():
-                if isinstance(key, str) and (key.startswith('text') or key in ('tEXt', 'iTXt', 'zTXt')):
+                # Preserve all metadata keys except NSFW ones we're overwriting
+                if key not in nsfw_keys_to_exclude:
                     pnginfo.add_text(key, str(value))
             
             # Add NSFW metadata to PNG text chunks (for our code to read)
@@ -204,16 +207,21 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
             
             # Also add to Windows-readable fields (Keywords/Tags field in Windows Properties)
             # Windows reads "Keywords" from PNG tEXt chunks - this is what shows in Properties > Details > Tags
+            existing_keywords = img.info.get("Keywords", None)
             if is_nsfw:
                 # Add to Keywords field (Windows Properties shows this in Tags)
-                pnginfo.add_text("Keywords", "NSFW")
+                # Preserve existing keywords if they're not NSFW-related
+                if existing_keywords and "nsfw" not in str(existing_keywords).lower():
+                    pnginfo.add_text("Keywords", f"{existing_keywords}, NSFW")
+                else:
+                    pnginfo.add_text("Keywords", "NSFW")
                 # Also add to Subject field
                 pnginfo.add_text("Subject", f"NSFW Content (Score: {score:.2f})")
                 # Add to Comments field (Windows Properties shows this)
                 pnginfo.add_text("Comment", f"NSFW Content Detected - Score: {score:.2f}, Label: {label}")
             else:
-                # Mark as safe (optional - can be omitted for SFW images)
-                # pnginfo.add_text("Keywords", "SFW")
+                # If SFW, preserve existing Windows-readable fields (they're already excluded from preservation loop above)
+                # So we don't need to add them back here - they're already preserved
                 pass
             
             # Save with metadata
@@ -245,14 +253,25 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
                     })
                     exif_dict["Exif"][piexif.ExifIFD.UserComment] = f"NSFW:{nsfw_data}".encode('utf-8')
                     
-                    # Add to Windows-readable fields
+                    # Add to Windows-readable fields (only overwrite if NSFW, preserve existing if SFW)
                     if is_nsfw:
                         # Add to XPKeywords (Windows Tags field) - tag 0x9C9E in 0th IFD
-                        exif_dict["0th"][piexif.ImageIFD.XPKeywords] = "NSFW".encode('utf-16le')
+                        # Preserve existing keywords if they're not NSFW-related
+                        existing_xpkeywords = None
+                        if "0th" in exif_dict and piexif.ImageIFD.XPKeywords in exif_dict["0th"]:
+                            existing_xpkeywords = exif_dict["0th"][piexif.ImageIFD.XPKeywords]
+                            if isinstance(existing_xpkeywords, bytes):
+                                existing_xpkeywords = existing_xpkeywords.decode('utf-16le', errors='ignore')
+                        if existing_xpkeywords and "nsfw" not in existing_xpkeywords.lower():
+                            # Preserve existing keywords and append NSFW
+                            exif_dict["0th"][piexif.ImageIFD.XPKeywords] = f"{existing_xpkeywords}, NSFW".encode('utf-16le')
+                        else:
+                            exif_dict["0th"][piexif.ImageIFD.XPKeywords] = "NSFW".encode('utf-16le')
                         # Add to XPSubject (Windows Subject field) - tag 0x9C9F
                         exif_dict["0th"][piexif.ImageIFD.XPSubject] = f"NSFW Content (Score: {score:.2f})".encode('utf-16le')
                         # Add to XPComment (Windows Comments field) - tag 0x9C9C
                         exif_dict["0th"][piexif.ImageIFD.XPComment] = f"NSFW Content Detected - Score: {score:.2f}, Label: {label}".encode('utf-16le')
+                    # If SFW, preserve existing Windows-readable fields (don't overwrite)
                     
                     # Convert back to bytes and save
                     exif_bytes = piexif.dump(exif_dict)
