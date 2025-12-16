@@ -1,7 +1,7 @@
 # ComfyUI Usgromana
 
 <p align="center">
-  <img src="./web/assets/dark_logo_transparent.png" width="220" />
+  <img src="./web/assets/Dark_Ugromana.png" width="220" />
 </p>
 
 <p align="center">
