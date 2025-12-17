@@ -1,0 +1,19 @@
+{
+    "50d2097b-a9c7-481a-8658-b13f54db5a63": {
+        "username": "jdallen",
+        "password": "$2b$12$4n6jdhYBWNizcynX30YZ.OcgO3MnjJWaRYHrmaDmkmEejJpp0wcyi",
+        "admin": true,
+        "groups": [
+            "admin"
+        ],
+        "sfw_check": false
+    },
+    "f4cb47bc-88da-4554-8778-4a4add936cc3": {
+        "username": "guest",
+        "password": "$2b$12$jmJezVNCfa3BeXiM6B75ZeP4mOm4AlLbiXLnElBMVuvc102Euzcxi",
+        "admin": false,
+        "groups": [
+            "guest"
+        ]
+    }
+}

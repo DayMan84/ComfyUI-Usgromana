@@ -1,7 +1,7 @@
 [project]
 name = "ComfyUI-Usgromana"
 description = "The next-generation security, governance, permissions, and multi‑user login control system for ComfyUI. Extension implements login, multi-user registration, user group management, ui management, group workflow management, SFW user management, IP filtering, and user-specific input/output workflow directories, and more."
-version = "1.8.0"
+version = "1.8.1"
 license = {file = "LICENSE"} 
 # classifiers = [
 #     # For OS-independent nodes (works on all operating systems)
@@ -31,7 +31,7 @@ Documentation = "https://github.com/DayMan84/ComfyUI-Usgromana/wiki"
 [tool.comfy]
 PublisherId = "dayman84"
 DisplayName = "ComfyUI-Usgromana"
-Icon = "https://raw.githubusercontent.com/DayMan84/ComfyUI-Usgromana/refs/heads/main/web/assets/dark_logo_transparent.png"
+Icon = "https://raw.githubusercontent.com/DayMan84/ComfyUI-Usgromana/refs/heads/main/web/assets/Dark_Usgromana.png"
 includes = [] 
 # "requires-comfyui" = ">=1.0.0"  # ComfyUI version compatibility
 

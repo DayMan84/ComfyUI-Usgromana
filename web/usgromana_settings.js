@@ -671,6 +671,9 @@ function escapeHtml(text) {
 }
 
 // --- 3. ADMIN DIALOG CLASS ---
+// Global reference to the current dialog instance
+window._usgromanaDialogInstance = null;
+
 class usgromanaDialog extends ComfyDialog {
     constructor() {
         super();
@@ -679,8 +682,25 @@ class usgromanaDialog extends ComfyDialog {
     }
 
     async show() {
+        // Prevent multiple dialogs from being open at the same time
+        if (window._usgromanaDialogInstance && window._usgromanaDialogInstance.overlay && 
+            document.body.contains(window._usgromanaDialogInstance.overlay)) {
+            console.log("[Usgromana] Dialog is already open, focusing existing dialog");
+            // Focus the existing dialog by bringing it to front
+            window._usgromanaDialogInstance.overlay.style.zIndex = "999999";
+            return;
+        }
+        
+        // Store this instance as the current dialog
+        window._usgromanaDialogInstance = this;
+        
         this.overlay.appendChild(this.element);
         document.body.appendChild(this.overlay);
+        
+        // Hide floating button when dialog opens
+        if (window._usgromanaFloatingButton && window._usgromanaFloatingButton.button) {
+            window._usgromanaFloatingButton.button.style.display = "none";
+        }
         this.element.innerHTML = `<div style="padding:50px; text-align:center;">Loading System Configuration...</div>`;
         
         // Fetch fresh data
@@ -820,7 +840,25 @@ class usgromanaDialog extends ComfyDialog {
         }
     }
 
-    close() { this.overlay.remove(); }
+    close() { 
+        this.overlay.remove();
+        
+        // Clear the global instance if this is the current dialog
+        if (window._usgromanaDialogInstance === this) {
+            window._usgromanaDialogInstance = null;
+        }
+        
+        // Show floating button when dialog closes
+        if (window._usgromanaFloatingButton && window._usgromanaFloatingButton.button) {
+            window._usgromanaFloatingButton.button.style.display = "flex";
+        }
+    }
+    
+    // Expose dialog class globally for floating button and other extensions
+    static expose() {
+        window.usgromanaDialog = usgromanaDialog;
+        console.log("[Usgromana] usgromanaDialog exposed to window.usgromanaDialog");
+    }
 
 renderUsers(list, container) {
     const currentName = currentUser?.username || null;
@@ -2281,6 +2319,9 @@ import("/usgromana/js/logout.js").catch(err => {
 app.registerExtension({
     name: "Usgromana.Settings",
     async setup() {
+        // Expose dialog class globally for floating button and other extensions
+        usgromanaDialog.expose();
+        
         const style = document.createElement("style");
         style.innerHTML = ADMIN_STYLES;
         document.head.appendChild(style);

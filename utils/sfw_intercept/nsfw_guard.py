@@ -208,6 +208,9 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
             # Also add to Windows-readable fields (Keywords/Tags field in Windows Properties)
             # Windows reads "Keywords" from PNG tEXt chunks - this is what shows in Properties > Details > Tags
             existing_keywords = img.info.get("Keywords", None)
+            existing_subject = img.info.get("Subject", None)
+            existing_comment = img.info.get("Comment", None)
+            
             if is_nsfw:
                 # Add to Keywords field (Windows Properties shows this in Tags)
                 # Preserve existing keywords if they're not NSFW-related
@@ -215,10 +218,22 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
                     pnginfo.add_text("Keywords", f"{existing_keywords}, NSFW")
                 else:
                     pnginfo.add_text("Keywords", "NSFW")
-                # Also add to Subject field
-                pnginfo.add_text("Subject", f"NSFW Content (Score: {score:.2f})")
-                # Add to Comments field (Windows Properties shows this)
-                pnginfo.add_text("Comment", f"NSFW Content Detected - Score: {score:.2f}, Label: {label}")
+                
+                # Preserve existing Subject if it's not NSFW-related, otherwise update with NSFW info
+                if existing_subject and "NSFW Content" not in str(existing_subject):
+                    # Preserve existing subject, append NSFW info
+                    pnginfo.add_text("Subject", f"{existing_subject} | NSFW Content (Score: {score:.2f})")
+                else:
+                    # No existing subject or it's already NSFW-related, set new one
+                    pnginfo.add_text("Subject", f"NSFW Content (Score: {score:.2f})")
+                
+                # Preserve existing Comment if it's not NSFW-related, otherwise update with NSFW info
+                if existing_comment and "NSFW Content Detected" not in str(existing_comment):
+                    # Preserve existing comment, append NSFW info
+                    pnginfo.add_text("Comment", f"{existing_comment} | NSFW Content Detected - Score: {score:.2f}, Label: {label}")
+                else:
+                    # No existing comment or it's already NSFW-related, set new one
+                    pnginfo.add_text("Comment", f"NSFW Content Detected - Score: {score:.2f}, Label: {label}")
             else:
                 # If SFW, preserve existing Windows-readable fields (they're already excluded from preservation loop above)
                 # So we don't need to add them back here - they're already preserved
@@ -267,10 +282,32 @@ def _set_nsfw_tag(path: str, is_nsfw: bool, score: float, label: str):
                             exif_dict["0th"][piexif.ImageIFD.XPKeywords] = f"{existing_xpkeywords}, NSFW".encode('utf-16le')
                         else:
                             exif_dict["0th"][piexif.ImageIFD.XPKeywords] = "NSFW".encode('utf-16le')
-                        # Add to XPSubject (Windows Subject field) - tag 0x9C9F
-                        exif_dict["0th"][piexif.ImageIFD.XPSubject] = f"NSFW Content (Score: {score:.2f})".encode('utf-16le')
-                        # Add to XPComment (Windows Comments field) - tag 0x9C9C
-                        exif_dict["0th"][piexif.ImageIFD.XPComment] = f"NSFW Content Detected - Score: {score:.2f}, Label: {label}".encode('utf-16le')
+                        
+                        # Preserve existing XPSubject if it's not NSFW-related, otherwise update with NSFW info
+                        existing_xpsubject = None
+                        if "0th" in exif_dict and piexif.ImageIFD.XPSubject in exif_dict["0th"]:
+                            existing_xpsubject = exif_dict["0th"][piexif.ImageIFD.XPSubject]
+                            if isinstance(existing_xpsubject, bytes):
+                                existing_xpsubject = existing_xpsubject.decode('utf-16le', errors='ignore')
+                        if existing_xpsubject and "NSFW Content" not in existing_xpsubject:
+                            # Preserve existing subject, append NSFW info
+                            exif_dict["0th"][piexif.ImageIFD.XPSubject] = f"{existing_xpsubject} | NSFW Content (Score: {score:.2f})".encode('utf-16le')
+                        else:
+                            # No existing subject or it's already NSFW-related, set new one
+                            exif_dict["0th"][piexif.ImageIFD.XPSubject] = f"NSFW Content (Score: {score:.2f})".encode('utf-16le')
+                        
+                        # Preserve existing XPComment if it's not NSFW-related, otherwise update with NSFW info
+                        existing_xpcomment = None
+                        if "0th" in exif_dict and piexif.ImageIFD.XPComment in exif_dict["0th"]:
+                            existing_xpcomment = exif_dict["0th"][piexif.ImageIFD.XPComment]
+                            if isinstance(existing_xpcomment, bytes):
+                                existing_xpcomment = existing_xpcomment.decode('utf-16le', errors='ignore')
+                        if existing_xpcomment and "NSFW Content Detected" not in existing_xpcomment:
+                            # Preserve existing comment, append NSFW info
+                            exif_dict["0th"][piexif.ImageIFD.XPComment] = f"{existing_xpcomment} | NSFW Content Detected - Score: {score:.2f}, Label: {label}".encode('utf-16le')
+                        else:
+                            # No existing comment or it's already NSFW-related, set new one
+                            exif_dict["0th"][piexif.ImageIFD.XPComment] = f"NSFW Content Detected - Score: {score:.2f}, Label: {label}".encode('utf-16le')
                     # If SFW, preserve existing Windows-readable fields (don't overwrite)
                     
                     # Convert back to bytes and save
@@ -346,6 +383,7 @@ def set_nsfw_tag_manual(path: str, is_nsfw: bool, score: float = 1.0, label: str
 def clear_nsfw_tag(path: str):
     """
     Clear NSFW tag from image metadata (force rescan on next check).
+    Preserves all other metadata - only removes NSFW-related content.
     
     Args:
         path: Image file path
@@ -358,22 +396,47 @@ def clear_nsfw_tag(path: str):
         img = Image.open(path)
         ext = os.path.splitext(path)[1].lower()
         
-        # For PNG: Remove from PngInfo (including Windows-readable fields)
+        # For PNG: Remove only NSFW-related metadata, preserve everything else
         if ext in ('.png',):
             pnginfo = PngImagePlugin.PngInfo()
-            # Copy existing text chunks except NSFW ones and Windows-readable NSFW fields
-            excluded_keys = {NSFW_METADATA_KEY, NSFW_SCORE_KEY, NSFW_LABEL_KEY, "Keywords", "Subject", "Comment"}
-            for key, value in img.info.items():
-                if key not in excluded_keys:
-                    if isinstance(key, str) and (key.startswith('text') or key in ('tEXt', 'iTXt', 'zTXt')):
-                        # Only copy if it's not an NSFW-related Windows field
-                        if not (key == "Keywords" and str(value).upper() in ("NSFW", "SFW")):
-                            pnginfo.add_text(key, str(value))
+            # Copy ALL existing text chunks, but filter out NSFW-related content
+            excluded_nsfw_keys = {NSFW_METADATA_KEY, NSFW_SCORE_KEY, NSFW_LABEL_KEY}
             
-            # Save without NSFW metadata
+            for key, value in img.info.items():
+                # Skip our custom NSFW keys
+                if key in excluded_nsfw_keys:
+                    continue
+                
+                # For Keywords, Subject, and Comment fields, remove only NSFW-related content
+                if key == "Keywords":
+                    keywords_str = str(value)
+                    # Remove NSFW from keywords list, preserve other keywords
+                    keywords_list = [k.strip() for k in keywords_str.split(',') if k.strip()]
+                    filtered_keywords = [k for k in keywords_list if k.upper() not in ("NSFW", "SFW")]
+                    if filtered_keywords:
+                        # Preserve the cleaned keywords
+                        pnginfo.add_text(key, ", ".join(filtered_keywords))
+                    # If no keywords remain after filtering, don't add the field (removes NSFW-only keywords)
+                elif key == "Subject":
+                    subject_str = str(value)
+                    # Only remove if it's clearly our NSFW Subject field
+                    if "NSFW Content" not in subject_str:
+                        # Preserve non-NSFW subject
+                        pnginfo.add_text(key, str(value))
+                elif key == "Comment":
+                    comment_str = str(value)
+                    # Only remove if it's clearly our NSFW Comment field
+                    if "NSFW Content Detected" not in comment_str:
+                        # Preserve non-NSFW comments
+                        pnginfo.add_text(key, str(value))
+                else:
+                    # Preserve all other metadata fields
+                    pnginfo.add_text(key, str(value))
+            
+            # Save with preserved metadata (NSFW tags removed)
             img.save(path, "PNG", pnginfo=pnginfo, optimize=False)
         
-        # For JPEG: Remove from EXIF
+        # For JPEG: Remove only NSFW-related metadata, preserve everything else
         elif ext in ('.jpg', '.jpeg'):
             
             # Try to use piexif for proper EXIF handling (if available)
@@ -386,19 +449,50 @@ def clear_nsfw_tag(path: str):
                 except:
                     exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "Interop": {}, "1st": {}, "thumbnail": None}
                 
-                # Remove NSFW data from UserComment
+                # Remove NSFW data from UserComment (only if it's our NSFW data)
                 if "Exif" in exif_dict and piexif.ExifIFD.UserComment in exif_dict["Exif"]:
                     user_comment = exif_dict["Exif"][piexif.ExifIFD.UserComment]
                     if isinstance(user_comment, bytes) and user_comment.startswith(b"NSFW:"):
+                        # Only remove if it's our NSFW tag
                         del exif_dict["Exif"][piexif.ExifIFD.UserComment]
                 
-                # Remove Windows-readable fields
+                # For Windows-readable fields, remove only NSFW-related content, preserve other content
                 if "0th" in exif_dict:
-                    for tag in [piexif.ImageIFD.XPKeywords, piexif.ImageIFD.XPSubject, piexif.ImageIFD.XPComment]:
-                        if tag in exif_dict["0th"]:
-                            del exif_dict["0th"][tag]
+                    # XPKeywords - remove NSFW from keywords, preserve others
+                    if piexif.ImageIFD.XPKeywords in exif_dict["0th"]:
+                        keywords_bytes = exif_dict["0th"][piexif.ImageIFD.XPKeywords]
+                        if isinstance(keywords_bytes, bytes):
+                            keywords_str = keywords_bytes.decode('utf-16le', errors='ignore')
+                            keywords_list = [k.strip() for k in keywords_str.split(',') if k.strip()]
+                            filtered_keywords = [k for k in keywords_list if k.upper() not in ("NSFW", "SFW")]
+                            if filtered_keywords:
+                                # Preserve cleaned keywords
+                                exif_dict["0th"][piexif.ImageIFD.XPKeywords] = ", ".join(filtered_keywords).encode('utf-16le')
+                            else:
+                                # Remove if only NSFW keywords existed
+                                del exif_dict["0th"][piexif.ImageIFD.XPKeywords]
+                    
+                    # XPSubject - only remove if it's clearly our NSFW Subject field
+                    if piexif.ImageIFD.XPSubject in exif_dict["0th"]:
+                        subject_bytes = exif_dict["0th"][piexif.ImageIFD.XPSubject]
+                        if isinstance(subject_bytes, bytes):
+                            subject_str = subject_bytes.decode('utf-16le', errors='ignore')
+                            if "NSFW Content" in subject_str:
+                                # Remove our NSFW Subject field
+                                del exif_dict["0th"][piexif.ImageIFD.XPSubject]
+                            # Otherwise preserve it
+                    
+                    # XPComment - only remove if it's clearly our NSFW Comment field
+                    if piexif.ImageIFD.XPComment in exif_dict["0th"]:
+                        comment_bytes = exif_dict["0th"][piexif.ImageIFD.XPComment]
+                        if isinstance(comment_bytes, bytes):
+                            comment_str = comment_bytes.decode('utf-16le', errors='ignore')
+                            if "NSFW Content Detected" in comment_str:
+                                # Remove our NSFW Comment field
+                                del exif_dict["0th"][piexif.ImageIFD.XPComment]
+                            # Otherwise preserve it
                 
-                # Convert back to bytes and save
+                # Convert back to bytes and save (preserving all non-NSFW metadata)
                 exif_bytes = piexif.dump(exif_dict)
                 img.save(path, "JPEG", quality=95, exif=exif_bytes, optimize=False)
             except ImportError:
@@ -407,7 +501,9 @@ def clear_nsfw_tag(path: str):
                 if hasattr(img, 'getexif'):
                     exif = img.getexif()
                     for tag_id, value in exif.items():
+                        # Only skip our NSFW UserComment tag (0x9286)
                         if tag_id != 0x9286 or (isinstance(value, str) and not value.startswith('NSFW:')):
+                            # Preserve all other EXIF tags
                             exif_dict[tag_id] = value
                 
                 exif_bytes = None

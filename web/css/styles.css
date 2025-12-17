@@ -456,3 +456,327 @@ a:active {
         color: #18181b;
     }
 }
+
+/* === USGROMANA FLOATING BUTTON ========================================== */
+
+.usgromana-floating-button {
+    position: fixed !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    max-width: 48px !important;
+    max-height: 48px !important;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #42176977 0%, #511eaf81 100%);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4),
+                0 0 0 2px rgba(255, 255, 255, 0.1);
+    cursor: grab !important;
+    z-index: 999999 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s ease, box-shadow 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto !important;
+    touch-action: none;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+    /* Ensure it's not affected by parent transforms */
+    isolation: isolate;
+}
+
+.usgromana-floating-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(82, 25, 214, 0.363),
+                0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+.usgromana-floating-button.dragging {
+    cursor: grabbing;
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(100, 59, 246, 0.63),
+                0 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.usgromana-floating-button-icon {
+    width: 32px !important;
+    height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    min-width: 32px;
+    min-height: 32px;
+    object-fit: contain;
+    object-position: center;
+    pointer-events: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    display: block !important;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+}
+
+/* === RADIAL MENU ========================================================= */
+
+.usgromana-radial-menu {
+    position: fixed;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 10001;
+    transform-origin: center;
+}
+
+.usgromana-radial-menu.active {
+    pointer-events: auto;
+}
+
+.usgromana-radial-menu-button {
+    position: absolute;
+    left: 0;
+    top: 0;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 50% !important;
+
+    background: rgba(30, 30, 30, 0.98) !important;
+    backdrop-filter: blur(10px);
+
+    border: 3px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    
+    /* Ensure each button is clearly separated */
+    isolation: isolate;
+    overflow: hidden;
+
+    cursor: pointer !important;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    
+    /* Prevent text selection and dragging */
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+
+    /* Start hidden at the center (behind the main button) */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform:
+        translate(-50%, -50%)
+        translate(0px, 0px)
+        scale(0);
+
+    transform-origin: center;
+    will-change: transform, opacity;
+    
+    /* Smooth transitions for hover and click animations */
+    transition: background 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.2s ease;
+}
+
+.usgromana-radial-menu.active .usgromana-radial-menu-button {
+    pointer-events: auto;
+}
+
+/* Only show buttons when menu is active AND button has animate-in class */
+.usgromana-radial-menu.active .usgromana-radial-menu-button.animate-in {
+    visibility: visible;
+    pointer-events: auto !important;
+    transition-delay: 0s;
+}
+
+.usgromana-radial-menu-button.animate-in {
+    /* Ensure transition is active with delay from CSS variable */
+    transition: transform 0.32s cubic-bezier(.2,.9,.2,1), 
+                opacity 0.32s cubic-bezier(.2,.9,.2,1),
+                background 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.2s ease;
+    transition-delay: var(--delay, 0s);
+}
+
+.usgromana-radial-menu-button.animate-out {
+    transition: transform 0.22s cubic-bezier(.2,.9,.2,1), 
+                opacity 0.22s cubic-bezier(.2,.9,.2,1);
+    transition-delay: var(--delay, 0s);
+}
+
+/* Hover animation: enhanced scale up with color change and glow */
+/* Must override animate-in transition */
+.usgromana-radial-menu-button:hover,
+.usgromana-radial-menu-button.animate-in:hover,
+.usgromana-radial-menu-button.hover-active {
+    background: rgba(59, 130, 246, 0.98) !important;
+    border-color: rgba(255, 255, 255, 0.7) !important;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.9),
+                0 0 20px rgba(59, 130, 246, 0.6),
+                0 0 0 3px rgba(255, 255, 255, 0.5),
+                inset 0 1px 3px rgba(255, 255, 255, 0.4) !important;
+    /* Scale up on hover with bounce effect - works with existing transform structure */
+    transform: translate(-50%, -50%) translate(var(--dx, 0px), var(--dy, 0px)) scale(1.5) !important;
+    filter: brightness(1.2) saturate(1.4) !important;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                background 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                border-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                box-shadow 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                filter 0.3s ease !important;
+}
+
+/* Click animation: enhanced scale down with feedback */
+.usgromana-radial-menu-button:active,
+.usgromana-radial-menu-button.animate-in:active {
+    filter: brightness(0.85) saturate(0.9) !important;
+    transform: translate(-50%, -50%) translate(var(--dx, 0px), var(--dy, 0px)) scale(0.8) !important;
+    box-shadow: 0 3px 8px rgba(59, 130, 246, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.2),
+                inset 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1) !important,
+                filter 0.12s ease !important,
+                background 0.12s ease !important,
+                border-color 0.12s ease !important,
+                box-shadow 0.12s ease !important;
+}
+
+.usgromana-radial-menu-button-icon {
+    font-size: 16px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    pointer-events: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.usgromana-radial-menu-button-label {
+    display: none !important; /* Hidden by default, shown as tooltip */
+}
+
+.usgromana-radial-menu-button-tooltip {
+    position: fixed !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    color: #ffffff !important;
+    padding: 8px 14px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    z-index: 999999 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8),
+                0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease, transform 0.3s ease !important;
+    display: none !important;
+    transform: translateY(-50%) !important;
+    max-width: 200px !important;
+    word-wrap: break-word !important;
+    visibility: hidden !important;
+    top: 0 !important;
+    left: 0 !important;
+}
+
+.usgromana-radial-menu-button-tooltip.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: translateY(-50%) !important;
+}
+
+@keyframes radialButtonIn {
+    from {
+        opacity: 0;
+        transform:
+            translate(-50%, -50%)
+            translate(0px, 0px)
+            scale(0);
+    }
+    to {
+        opacity: 1;
+        transform:
+            translate(-50%, -50%)
+            translate(var(--dx, 0px), var(--dy, 0px))
+            scale(1);
+    }
+}
+
+@keyframes radialButtonOut {
+    from {
+        opacity: 1;
+        transform:
+            translate(-50%, -50%)
+            translate(var(--dx, 0px), var(--dy, 0px))
+            scale(1);
+    }
+    to {
+        opacity: 0;
+        transform:
+            translate(-50%, -50%)
+            translate(0px, 0px)
+            scale(0);
+    }
+}
+
+/* Light mode support for floating button */
+@media (prefers-color-scheme: light) {
+    .usgromana-floating-button {
+        background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5),
+                    0 0 0 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .usgromana-radial-menu-button {
+        background: rgba(255, 255, 255, 0.95);
+        border-color: rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
+                    0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .usgromana-radial-menu-button-label {
+        color: #1f2937;
+    }
+
+    .usgromana-radial-menu-button:hover {
+        background: rgba(59, 130, 246, 0.95);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+}
