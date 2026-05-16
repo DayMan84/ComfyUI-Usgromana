@@ -209,6 +209,8 @@ def _try_imports():
 
 # Attempt to load the internal functions
 _try_imports()
+if not _NSFW_GUARD_AVAILABLE:
+    print("[Usgromana API] NSFW Guard not available (optional); API will fail open.")
 
 
 def is_available() -> bool:
@@ -262,8 +264,8 @@ def is_sfw_enforced_for_user(username: Optional[str] = None) -> bool:
     if _users_db:
         _, rec = _users_db.get_user(username)
         if rec is not None:
-            return rec.get("sfw_check", True)  # Default to True (enforced)
-    return True  # Default to enforced if user not found
+            return bool(rec.get("sfw_check", True))
+    return True  # Unknown user: treat as SFW enforced (fail closed)
 
 
 def check_tensor_nsfw(images_tensor, threshold: float = 0.5) -> bool:

@@ -1,10 +1,26 @@
 # --- START OF FILE routes/admin.py ---
 from aiohttp import web
-from ..globals import routes, jwt_auth, users_db, ip_filter
+from ..globals import routes, jwt_auth, users_db, ip_filter, logger
 from ..constants import GROUPS_CONFIG_FILE, DEFAULT_GROUP_CONFIG_PATH, WHITELIST_FILE, BLACKLIST_FILE, USERS_FILE
 from ..utils.json_utils import load_json_file, save_json_file
 from ..utils.admin_logic import patch_user_group, delete_user_record
 from ..utils.bootstrap import load_default_groups
+from ..utils.ui_defaults import (
+    get_ui_defaults,
+    set_assets_imports_visibility,
+    ASSETS_VISIBILITY_MODES,
+)
+
+def _admin_username(request):
+    """Return the username of the authenticated admin, or 'unknown' for audit log."""
+    token = jwt_auth.get_token_from_request(request)
+    if not token:
+        return "unknown"
+    try:
+        p = jwt_auth.decode_access_token(token)
+        return p.get("username", "unknown")
+    except Exception:
+        return "unknown"
 
 def is_admin(request):
     token = jwt_auth.get_token_from_request(request)
@@ -13,7 +29,17 @@ def is_admin(request):
         p = jwt_auth.decode_access_token(token)
         _, u = users_db.get_user(p['username'])
         return u.get('admin', False) or "admin" in u.get('groups', [])
-    except: return False
+    except Exception:
+        return False
+
+@routes.get("/usgromana/health")
+async def health(request):
+    """Readiness/health check for reverse proxies and load balancers. Returns 200 when extension is loaded and users DB is readable."""
+    try:
+        users_db.load_users()
+        return web.json_response({"status": "ok", "extension": "usgromana"})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=503)
 
 @routes.get("/usgromana/api/groups")
 async def api_groups(request):
@@ -33,9 +59,57 @@ async def api_update_groups(request):
             for k, v in perms.items():
                 current[g_lower][k] = bool(v)
         save_json_file(GROUPS_CONFIG_FILE, current)
+        logger.info(f"[Audit] groups updated by {_admin_username(request)}")
         return web.json_response({"status": "ok"})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
+
+@routes.get("/usgromana/api/ui-defaults")
+async def api_ui_defaults_get(request):
+    if not is_admin(request):
+        return web.json_response({"error": "Admin only"}, status=403)
+    defaults = get_ui_defaults()
+    return web.json_response(
+        {
+            "defaults": defaults,
+            "assets_imports_visibility": defaults.get("assets_imports_visibility"),
+            "allowed_assets_imports_visibility": list(ASSETS_VISIBILITY_MODES),
+        }
+    )
+
+
+@routes.put("/usgromana/api/ui-defaults")
+async def api_ui_defaults_put(request):
+    if not is_admin(request):
+        return web.json_response({"error": "Admin only"}, status=403)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    mode = (data.get("assets_imports_visibility") or "").strip()
+    if not mode:
+        return web.json_response(
+            {"error": "Missing assets_imports_visibility"}, status=400
+        )
+    try:
+        set_assets_imports_visibility(mode)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+    logger.info(
+        f"[Audit] UI defaults updated (assets_imports_visibility={mode}) "
+        f"by {_admin_username(request)}"
+    )
+    defaults = get_ui_defaults()
+    return web.json_response(
+        {
+            "status": "ok",
+            "defaults": defaults,
+            "assets_imports_visibility": defaults.get("assets_imports_visibility"),
+        }
+    )
+
 
 @routes.get("/usgromana/api/users")
 async def api_users(request):
@@ -71,6 +145,7 @@ async def api_update_user_route(request):
 
     success = patch_user_group(target, groups, is_admin_flag, sfw_check)
     if success:
+        logger.info(f"[Audit] user updated: target={target} by {_admin_username(request)}")
         return web.json_response({"status": "ok"})
     return web.Response(status=404)
 
@@ -83,6 +158,7 @@ async def api_delete_user_route(request):
     result = delete_user_record(target)
     if result == "last_admin": return web.json_response({"error": "Cannot delete last admin"}, status=400)
     if result is False: return web.Response(status=404)
+    logger.info(f"[Audit] user deleted: target={target} by {_admin_username(request)}")
     return web.json_response({"status": "ok"})
 
 @routes.get("/usgromana/api/ip-lists")
@@ -139,7 +215,7 @@ async def api_update_ip_lists(request):
         
         # Reload the filter lists to update in-memory cache
         ip_filter.load_filter_list()
-        
+        logger.info(f"[Audit] IP lists updated by {_admin_username(request)}")
         return web.json_response({"status": "ok"})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)

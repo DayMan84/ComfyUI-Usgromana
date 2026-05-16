@@ -2,6 +2,16 @@
 from aiohttp import web
 from ..globals import routes, jwt_auth, users_db
 from ..utils import user_env
+from ..utils.ui_defaults import (
+    ASSETS_VISIBILITY_DISABLE_ALL,
+    get_assets_imports_visibility,
+)
+from ..utils.comfy_user_bridge import (
+    get_comfy_user_id_for_request,
+    install_comfy_user_bridge,
+    _list_generated_asset_items,
+    _asset_summary_to_completed_job,
+)
 import folder_paths
 import os
 import shutil
@@ -52,6 +62,26 @@ def _get_caller_admin_info(request):
         return False, None, ["guest"]
 
 
+@routes.get("/usgromana/api/generated-jobs")
+async def api_generated_jobs(request: web.Request) -> web.Response:
+    """
+    Disk-backed output images as /api/jobs-shaped rows for the Assets Generated tab.
+    (ComfyUI's UI loads Generated from job history, not /api/assets.)
+    """
+    if get_assets_imports_visibility() == ASSETS_VISIBILITY_DISABLE_ALL:
+        return web.json_response({"jobs": [], "total": 0})
+
+    install_comfy_user_bridge()
+    user_id = get_comfy_user_id_for_request(request)
+    jobs = []
+    for item in _list_generated_asset_items(user_id, limit=500):
+        job = _asset_summary_to_completed_job(item)
+        if job:
+            jobs.append(job)
+    jobs.sort(key=lambda j: int(j.get("create_time") or 0), reverse=True)
+    return web.json_response({"jobs": jobs, "total": len(jobs)})
+
+
 @routes.get("/usgromana/api/me")
 async def api_me(request: web.Request) -> web.Response:
     """
@@ -63,11 +93,24 @@ async def api_me(request: web.Request) -> web.Response:
         return web.json_response(
             {
                 "username": None,
+                "user_id": None,
                 "role": "guest",
                 "groups": ["guest"],
                 "is_admin": False,
+                "assets_imports_visibility": get_assets_imports_visibility(),
             }
         )
+
+    user_id = None
+    token = jwt_auth.get_token_from_request(request)
+    if token:
+        try:
+            payload = jwt_auth.decode_access_token(token)
+            user_id = payload.get("id")
+        except Exception:
+            user_id = None
+    if not user_id:
+        user_id, _ = users_db.get_user(username)
 
     # Choose primary role based on groups priority
     role = "guest"
@@ -79,9 +122,11 @@ async def api_me(request: web.Request) -> web.Response:
     return web.json_response(
         {
             "username": username,
+            "user_id": user_id,
             "role": role,
             "groups": groups,
             "is_admin": is_admin,
+            "assets_imports_visibility": get_assets_imports_visibility(),
         }
     )
 

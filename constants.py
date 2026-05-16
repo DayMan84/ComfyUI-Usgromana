@@ -20,19 +20,31 @@ CONFIG_FILE_PATH = os.path.join(CURRENT_DIR, "config.json")
 def _load_config(path):
     if os.path.exists(path):
         try:
-            with open(path, "r") as f: return json.load(f)
-        except: pass
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            warnings.warn(f"[Usgromana] Failed to load config from {path}: {e}")
     return {}
 
 config_data = _load_config(CONFIG_FILE_PATH)
 
-# --- Files & Paths ---
-USERS_FILE = os.path.join(CURRENT_DIR, "users", "users.json")
+from .utils.users_storage import ensure_users_data_layout, resolve_users_database_path
+
+# --- Files & Paths (paths from config.json; defaults for backward compatibility) ---
+_users_db_configured = os.path.join(
+    CURRENT_DIR, config_data.get("users_db", "users/users.json")
+)
+USERS_FILE = resolve_users_database_path(_users_db_configured, CURRENT_DIR)
 GROUPS_CONFIG_FILE = os.path.join(CURRENT_DIR, "users", "usgromana_groups.json")
 DEFAULT_GROUP_CONFIG_PATH = os.path.join(CURRENT_DIR, "users", "defaults", "default_group_config.json")
-WHITELIST_FILE = os.path.join(CURRENT_DIR, "users", "whitelist.txt")
-BLACKLIST_FILE = os.path.join(CURRENT_DIR, "users", "blacklist.txt")
+DEFAULT_UI_DEFAULTS_PATH = os.path.join(CURRENT_DIR, "users", "defaults", "default_ui_defaults.json")
+UI_DEFAULTS_FILE = os.path.join(CURRENT_DIR, "users", "usgromana_ui_defaults.json")
+WHITELIST_FILE = os.path.join(CURRENT_DIR, config_data.get("whitelist", "users/whitelist.txt"))
+BLACKLIST_FILE = os.path.join(CURRENT_DIR, config_data.get("blacklist", "users/blacklist.txt"))
 LOG_FILE = os.path.join(CURRENT_DIR, config_data.get("log", "usgromana.log"))
+
+# Create users/ layout only; never delete or replace live data files.
+ensure_users_data_layout(CURRENT_DIR, touch_files=[WHITELIST_FILE, BLACKLIST_FILE])
 
 # --- Configuration Values ---
 LOG_LEVELS = config_data.get("log_levels", ["INFO"])
@@ -48,6 +60,7 @@ TOKEN_ALGORITHM = "HS256"
 BLACKLIST_AFTER_ATTEMPTS = config_data.get("blacklist_after_attempts", 5)
 FREE_MEMORY_ON_LOGOUT = config_data.get("free_memory_on_logout", True)
 FORCE_HTTPS = config_data.get("force_https", False)
-SEPERATE_USERS = config_data.get("seperate_users", True)
+# Config key kept as "seperate_users" for backward compatibility
+SEPARATE_USERS = config_data.get("seperate_users", True)
 MANAGER_ADMIN_ONLY = config_data.get("manager_admin_only", True)
 MATCH_HEADERS = {"X-Forwarded-Proto": "https"}

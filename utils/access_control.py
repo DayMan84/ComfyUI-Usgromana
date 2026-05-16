@@ -32,6 +32,29 @@ EXTENSION_BLOCK_MAP = {
     ]
 }
 
+
+def _usgromana_meta_from_queue_entry(entry):
+    """Split Usgromana ``{user_id}`` tail from a queue heap entry."""
+    if isinstance(entry, tuple) and entry and isinstance(entry[-1], dict):
+        if "user_id" in entry[-1]:
+            return entry[-1], entry[:-1]
+    return {}, entry
+
+
+def sanitize_prompt_tuple_for_api(prompt_tuple):
+    """
+    ComfyUI ``/api/jobs`` expects history prompt tuples with 5 elements
+    (priority, prompt_id, prompt, extra_data, outputs_to_execute).
+    Newer Comfy adds ``sensitive`` at index 5; strip it before persisting history.
+    """
+    if not isinstance(prompt_tuple, tuple):
+        return prompt_tuple
+    _, body = _usgromana_meta_from_queue_entry(prompt_tuple)
+    if len(body) > 5:
+        return body[:5]
+    return body
+
+
 class AccessControl:
     def __init__(self, users_db: UsersDB, server: PromptServer, groups_config_file: str):
         self.users_db = users_db
@@ -143,23 +166,67 @@ class AccessControl:
     def get_current_user_id(self):
         return self._current_user.get() or self.__current_user_id
 
+    def _resolved_directory_user_id(self) -> str | None:
+        """User id for per-user folder roots, or None when no request context (e.g. startup asset scan)."""
+        uid = self.get_current_user_id()
+        return uid if uid else None
+
     def get_user_output_directory(self):
-        return os.path.join(self.__get_output_directory(), self.get_current_user_id() or "public")
+        base = self.__get_output_directory()
+        uid = self._resolved_directory_user_id()
+        if not uid:
+            return base
+        path = os.path.join(base, uid)
+        os.makedirs(path, exist_ok=True)
+        return path
 
     def get_user_temp_directory(self):
-        return os.path.join(self.__get_temp_directory(), self.get_current_user_id() or "public")
+        base = self.__get_temp_directory()
+        uid = self._resolved_directory_user_id()
+        if not uid:
+            return base
+        path = os.path.join(base, uid)
+        os.makedirs(path, exist_ok=True)
+        return path
 
     def get_user_input_directory(self):
-        directory = os.path.join(self.__get_input_directory(), self.get_current_user_id() or "public")
-        os.makedirs(directory, exist_ok=True)
-        return directory
+        base = self.__get_input_directory()
+        uid = self._resolved_directory_user_id()
+        if not uid:
+            return base
+        path = os.path.join(base, uid)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def get_user_storage_prefixes(self, user_id: str | None = None) -> list[str]:
+        """Absolute paths for a user's isolated output/input/temp folders."""
+        uid = user_id or self._resolved_directory_user_id()
+        if not uid:
+            return []
+        prefixes = []
+        for base in (
+            self.__get_output_directory(),
+            self.__get_input_directory(),
+            self.__get_temp_directory(),
+        ):
+            path = os.path.join(base, uid)
+            os.makedirs(path, exist_ok=True)
+            prefixes.append(os.path.abspath(path))
+        return prefixes
 
     def add_user_specific_folder_paths(self, json_data):
-        user_id = self.get_current_user_id() or "public"
+        user_id = self._resolved_directory_user_id()
+        if not user_id:
+            return json_data
         if isinstance(json_data, dict):
             for k, v in json_data.items():
-                if k == "filename_prefix":
-                    json_data[k] = f"{user_id}/{v}"
+                if k == "filename_prefix" and isinstance(v, str):
+                    # input/output/temp roots are already per-user; do not nest user_id again.
+                    clean = v.replace("\\", "/").strip("/")
+                    if clean.startswith(f"{user_id}/"):
+                        json_data[k] = clean
+                    else:
+                        json_data[k] = clean
                 else:
                     self.add_user_specific_folder_paths(v)
         elif isinstance(json_data, list):
@@ -168,6 +235,8 @@ class AccessControl:
         return json_data
 
     def patch_folder_paths(self):
+        # Match ComfyUI Assets view: each user sees their own input/output/temp roots.
+        folder_paths.get_output_directory = self.get_user_output_directory
         folder_paths.get_temp_directory = self.get_user_temp_directory
         folder_paths.get_input_directory = self.get_user_input_directory
         self.server.add_on_prompt_handler(self.add_user_specific_folder_paths)
@@ -239,29 +308,56 @@ class AccessControl:
             return (entry, task_id)
 
     def user_queue_task_done(self, item_id, history_result, **kwargs):
+        process_item = kwargs.get("process_item")
+        status = kwargs.get("status")
         with self.__prompt_queue.mutex:
             item = self.__prompt_queue.currently_running.pop(item_id)
             while len(self.__prompt_queue.history) > MAXIMUM_HISTORY_SIZE:
                 self.__prompt_queue.history.pop(next(iter(self.__prompt_queue.history)))
-            prompt_tuple = item[:-1] if isinstance(item[-1], dict) else item
-            meta = item[-1] if isinstance(item[-1], dict) else {}
-            self.__prompt_queue.history[prompt_tuple[1]] = {
-                "prompt": prompt_tuple,
-                "outputs": {},
-                "status": {
+
+            meta, prompt_body = _usgromana_meta_from_queue_entry(item)
+            if process_item is not None:
+                prompt_stored = process_item(prompt_body)
+            else:
+                prompt_stored = sanitize_prompt_tuple_for_api(prompt_body)
+
+            if status is not None and hasattr(status, "_asdict"):
+                status_dict = copy.deepcopy(status._asdict())
+            else:
+                status_dict = {
                     "completed": kwargs.get("completed"),
                     "messages": kwargs.get("messages"),
-                },
+                }
+
+            prompt_id = prompt_stored[1]
+            self.__prompt_queue.history[prompt_id] = {
+                "prompt": prompt_stored,
+                "outputs": {},
+                "status": status_dict,
                 "user_id": meta.get("user_id"),
             }
             if history_result:
-                self.__prompt_queue.history[prompt_tuple[1]].update(history_result)
+                self.__prompt_queue.history[prompt_id].update(history_result)
+                prompt_user = meta.get("user_id")
+                if prompt_user:
+                    try:
+                        self.set_current_user_id(prompt_user, set_fallback=True)
+                        from .sfw_intercept.nsfw_guard import (
+                            tag_output_images_from_history,
+                        )
+
+                        tag_output_images_from_history(history_result)
+                        from .comfy_user_bridge import register_outputs_from_history
+
+                        register_outputs_from_history(history_result, prompt_user)
+                    except Exception as e:
+                        print(f"[Usgromana] post-prompt hooks: {e}")
             self.server.queue_updated()
 
     def user_queue_get_current_queue(self):
         def unwrap(entry):
-            if isinstance(entry, tuple) and isinstance(entry[-1], dict): return entry[:-1]
-            return entry
+            _, body = _usgromana_meta_from_queue_entry(entry)
+            return sanitize_prompt_tuple_for_api(body)
 
         current_user = self.get_current_user_id()
         with self.__prompt_queue.mutex:
@@ -288,8 +384,8 @@ class AccessControl:
 
     def user_queue_delete_queue_item(self, func):
         def unwrap(entry):
-            if isinstance(entry, tuple) and isinstance(entry[-1], dict): return entry[:-1]
-            return entry
+            _, body = _usgromana_meta_from_queue_entry(entry)
+            return sanitize_prompt_tuple_for_api(body)
 
         with self.__prompt_queue.mutex:
             for i, item in enumerate(self.__prompt_queue.queue):
@@ -309,13 +405,21 @@ class AccessControl:
                 if v.get("user_id") == user
             }
             if prompt_id:
-                return {prompt_id: filtered.get(prompt_id)} if prompt_id in filtered else {}
+                if prompt_id not in filtered:
+                    return {}
+                entry = dict(filtered[prompt_id])
+                if "prompt" in entry:
+                    entry["prompt"] = sanitize_prompt_tuple_for_api(entry["prompt"])
+                return {prompt_id: entry}
             keys = list(filtered.keys())
             if offset < 0:
                 offset = max(0, len(keys) - max_items) if max_items else 0
             result = {}
             for k in keys[offset:]:
-                result[k] = filtered[k]
+                entry = dict(filtered[k])
+                if "prompt" in entry:
+                    entry["prompt"] = sanitize_prompt_tuple_for_api(entry["prompt"])
+                result[k] = entry
                 if max_items and len(result) >= max_items:
                     break
             return result

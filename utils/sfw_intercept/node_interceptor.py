@@ -5,9 +5,11 @@ import numpy as np
 from PIL import Image
 import latent_preview
 
+from ...utils.media_paths import resolve_output_file_path
 from ...utils.sfw_intercept.nsfw_guard import (
     _get_nsfw_pipeline,
     is_sfw_enforced_for_current_session,
+    should_block_image_for_current_user,
 )
 # --- CONFIGURATION ---
 SCORE_THRESHOLD = 0.50  
@@ -56,6 +58,23 @@ def check_tensor_nsfw(images_tensor):
     
     return False
 
+
+def _tag_saved_image_outputs(result: dict | None) -> None:
+    """Write NSFW metadata to disk right after SaveImage, before asset indexing."""
+    if not result or not is_sfw_enforced_for_current_session(quiet=True):
+        return
+    images = (result.get("ui") or {}).get("images") or []
+    for img in images:
+        if not isinstance(img, dict):
+            continue
+        path = resolve_output_file_path(
+            img.get("filename"),
+            (img.get("subfolder") or "").strip() or None,
+        )
+        if path:
+            should_block_image_for_current_user(path, quiet=True, use_cache=True)
+
+
 # ----------------------------------------------------------------------------
 # PART 2: The Kill Switch
 # ----------------------------------------------------------------------------
@@ -99,14 +118,16 @@ def install_node_interceptor():
             print(f"[Usgromana] 🛑 BLOCKED {mode}: Replacing with BLACK SQUARE.")
             black_images = torch.zeros_like(images)
             if mode == "save":
-                return original_save(self, black_images, filename_prefix, prompt, extra_pnginfo)
-            else:
-                return original_preview(self, black_images, filename_prefix, prompt, extra_pnginfo)
+                out = original_save(self, black_images, filename_prefix, prompt, extra_pnginfo)
+                _tag_saved_image_outputs(out)
+                return out
+            return original_preview(self, black_images, filename_prefix, prompt, extra_pnginfo)
         
         if mode == "save":
-            return original_save(self, images, filename_prefix, prompt, extra_pnginfo)
-        else:
-            return original_preview(self, images, filename_prefix, prompt, extra_pnginfo)
+            out = original_save(self, images, filename_prefix, prompt, extra_pnginfo)
+            _tag_saved_image_outputs(out)
+            return out
+        return original_preview(self, images, filename_prefix, prompt, extra_pnginfo)
 
     def save_patch(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
         return intercepted_wrapper(self, images, filename_prefix, prompt, extra_pnginfo, mode="save")

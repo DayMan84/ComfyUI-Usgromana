@@ -14,7 +14,17 @@ def load_json_file(path, default=None):
 
 def save_json_file(path, data):
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+        os.replace(tmp_path, path)
     except Exception as e:
         print(f"[Usgromana] Error saving {path}: {e}")
+        try:
+            if os.path.exists(f"{path}.tmp"):
+                os.remove(f"{path}.tmp")
+        except OSError:
+            pass

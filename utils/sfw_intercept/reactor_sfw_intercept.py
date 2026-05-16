@@ -1,4 +1,5 @@
 # utils/sfw_intercept/reactor_sfw_intercept.py
+# Canonical ReActor SFW intercept (used by __init__.py). Do not add a duplicate under utils/.
 
 import importlib.util
 import os
@@ -84,7 +85,7 @@ def _apply_patch():
         if username:
             _, rec = users_db.get_user(username)
             if rec:
-                sfw_flag = rec.get("sfw_check", True)
+                sfw_flag = bool(rec.get("sfw_check", True))
 
         # Bypass path
         if sfw_flag is False:

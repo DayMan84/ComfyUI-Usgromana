@@ -7,6 +7,7 @@ from ..constants import HTML_DIR
 from ..utils.bootstrap import ensure_guest_user, ensure_groups_config
 from ..utils.ip_filter import get_ip
 from ..utils import user_env
+from ..utils.comfy_user_bridge import sync_user_to_comfy_manager
 
 @routes.get("/register")
 async def get_register(request: web.Request) -> web.Response:
@@ -39,7 +40,9 @@ async def post_register(request: web.Request) -> web.Response:
     if None not in users_db.get_user(new_username):
         return web.json_response({"error": "Username exists"}, status=400)
 
-    users_db.add_user(str(uuid.uuid4()), new_username, new_password, is_first_admin)
+    new_user_id = str(uuid.uuid4())
+    users_db.add_user(new_user_id, new_username, new_password, is_first_admin)
+    sync_user_to_comfy_manager(new_user_id, new_username)
 
     # Create directory immediately
     user_env.get_user_workflow_dir(new_username)
@@ -72,6 +75,7 @@ async def post_login(request: web.Request) -> web.Response:
         user_env.get_user_workflow_dir("guest")
         
         token = jwt_auth.create_access_token({"id": guest_id, "username": "guest"})
+        sync_user_to_comfy_manager(guest_id, "guest")
         resp = web.json_response({"message": "Guest login", "jwt_token": token})
         resp.set_cookie("jwt_token", token, httponly=True, samesite="Strict")
         logger.login_success(ip, "guest")
@@ -87,6 +91,7 @@ async def post_login(request: web.Request) -> web.Response:
         user_env.get_user_workflow_dir(username)
         
         token = jwt_auth.create_access_token({"id": user_id, "username": username})
+        sync_user_to_comfy_manager(user_id, username)
         resp = web.json_response({"message": "Login successful", "jwt_token": token})
         resp.set_cookie("jwt_token", token, httponly=True, samesite="Strict")
         logger.login_success(ip, username)

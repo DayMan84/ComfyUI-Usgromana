@@ -2,8 +2,17 @@
 from aiohttp import web
 import os
 import folder_paths
+
+from .utils.enable_comfy_assets import assets_enable_requested, enable_comfy_assets
+from .utils.asyncio_client_disconnect import install_asyncio_disconnect_quiet_handler
+
+install_asyncio_disconnect_quiet_handler()
+
+if assets_enable_requested():
+    enable_comfy_assets(log=False)
+
 from .nodes import *
-from .constants import FORCE_HTTPS, SEPERATE_USERS, MATCH_HEADERS
+from .constants import FORCE_HTTPS, SEPARATE_USERS, MATCH_HEADERS
 from .globals import (
     app, ip_filter, sanitizer, timeout, jwt_auth, access_control,
     instance, current_username_var
@@ -17,6 +26,10 @@ from .utils.sfw_intercept.nsfw_guard import (
     set_latest_prompt_user,
 )
 from .utils.sfw_intercept.node_interceptor import install_node_interceptor
+from .utils.comfy_user_bridge import (
+    install_comfy_user_bridge,
+    create_comfy_user_middleware,
+)
 
 import server
 
@@ -44,14 +57,15 @@ async def workflow_interceptor_middleware(request, handler):
     if isinstance(response, web.StreamResponse):
         return response
 
-    # 2. User Resolution
+    # 2. User Resolution (jwt_auth sets request["user"] to username string)
     username = None
     try:
-        # If jwt_auth middleware already attached a user dict
-        if hasattr(request, "user") and request.user:
-            username = request.user.get("username")
-        else:
-            # Fallback to whatever your workflow_routes helper does
+        raw_user = request.get("user") if hasattr(request, "get") else None
+        if isinstance(raw_user, dict):
+            username = raw_user.get("username")
+        elif isinstance(raw_user, str) and raw_user.strip():
+            username = raw_user.strip()
+        if not username:
             username = workflow_routes.get_current_user(request)
     except Exception:
         username = None
@@ -65,30 +79,37 @@ async def workflow_interceptor_middleware(request, handler):
         set_latest_prompt_user(username)
         print(f"[Usgromana::Middleware] PROMPT CAPTURE path={path} user={username!r}")
 
-    # --- Case A: /view ---
+    # --- NSFW only (/view, /static_gallery): independent of assets visibility ---
     if path == "/view" and method == "GET":
+        from .utils.media_paths import resolve_output_file_path
+
         q = request.rel_url.query
         filename = q.get("filename") or q.get("file") or q.get("name")
         img_type = q.get("type", "output")
+        subfolder = q.get("subfolder") or ""
 
-        if filename and (img_type == "output" or img_type == "temp"):
-            if img_type == "temp":
-                target_dir = folder_paths.get_temp_directory()
-            else:
-                target_dir = folder_paths.get_output_directory()
+        if filename and img_type == "output":
+            img_path = resolve_output_file_path(filename, subfolder)
+            if img_path and should_block_image_for_current_user(img_path):
+                return web.Response(status=403, text="NSFW Blocked")
+        elif filename and img_type == "temp":
+            from .utils.media_paths import global_temp_directory
 
-            img_path = os.path.join(target_dir, filename)
-
-            if os.path.isfile(img_path):
-                if should_block_image_for_current_user(img_path):
-                    return web.Response(status=403, text="NSFW Blocked")
+            img_path = os.path.normpath(
+                os.path.join(global_temp_directory(), subfolder, filename)
+                if subfolder
+                else os.path.join(global_temp_directory(), filename)
+            )
+            if os.path.isfile(img_path) and should_block_image_for_current_user(img_path):
+                return web.Response(status=403, text="NSFW Blocked")
 
     # --- Case B: /static_gallery ---
     if path.startswith("/static_gallery/") and method == "GET":
+        from .utils.media_paths import resolve_static_gallery_path
+
         rel = path[len("/static_gallery/") :].lstrip("/\\")
-        out_dir = folder_paths.get_output_directory()
-        img_path = os.path.join(out_dir, rel)
-        if os.path.isfile(img_path) and should_block_image_for_current_user(img_path):
+        img_path = resolve_static_gallery_path(rel)
+        if img_path and should_block_image_for_current_user(img_path):
             return web.Response(status=403, text="NSFW Blocked")
 
     return await handler(request)
@@ -114,10 +135,12 @@ app.middlewares.append(jwt_auth.create_jwt_middleware(
 # resolve usernames inside workflow_interceptor_middleware.
 app.middlewares.append(workflow_interceptor_middleware)
 
-if SEPERATE_USERS:
+if SEPARATE_USERS:
     app.middlewares.append(access_control.create_folder_access_control_middleware())
     access_control.patch_folder_paths()
     access_control.patch_prompt_queue()
+    install_comfy_user_bridge()
+    app.middlewares.append(create_comfy_user_middleware())
 
 app.middlewares.append(access_control.create_usgromana_middleware())
 watcher.register(app)

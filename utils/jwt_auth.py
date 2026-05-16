@@ -82,7 +82,10 @@ class JWTAuth:
                 request["user_id"] = user_id
                 request["user"] = username
 
-                set_fallback = request.path in ["/api/prompt"]
+                set_fallback = (
+                    request.path in ("/api/prompt", "/prompt")
+                    or request.path.startswith("/api/assets")
+                )
                 self.access_control.set_current_user_id(user_id, set_fallback)
 
             except jwt.ExpiredSignatureError:

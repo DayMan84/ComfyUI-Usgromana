@@ -4,6 +4,8 @@ import os
 import hashlib
 from pathlib import Path
 
+from .json_utils import save_json_file
+
 
 class UsersDB:
     def __init__(self, database: str | Path):
@@ -57,8 +59,7 @@ class UsersDB:
 
     def save_users(self, users: dict) -> None:
         """Save users to the database and update the hash."""
-        with open(self.database, "w", encoding="utf-8") as f:
-            json.dump(users, f)
+        save_json_file(self.database, users)
         self._database_hash = self.calculate_file_hash()
 
     # ----------------------------

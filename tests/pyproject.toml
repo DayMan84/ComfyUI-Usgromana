@@ -1,0 +1,6 @@
+# Pytest config so that when running "pytest tests/", rootdir is tests/ and the
+# extension root is not collected as a Package (avoids importing root __init__.py).
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

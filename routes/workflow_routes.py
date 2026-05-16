@@ -313,8 +313,8 @@ async def middleware_dispatch(request):
     if path.startswith("/usgromana-gallery"):
         return None
 
-    # Optional bypass
-    if request.query.get("bypass") == "true":
+    # Bypass only when explicitly enabled (e.g. debugging); not available in production by default
+    if os.environ.get("USGROMANA_ALLOW_BYPASS", "").strip().lower() in ("1", "true", "yes") and request.query.get("bypass") == "true":
         return None
 
     # --- Global NSFW enforcement on /view ---
@@ -329,10 +329,12 @@ async def middleware_dispatch(request):
 
         # Only guard standard output images for now
         if filename and img_type == "output":
-            out_dir = folder_paths.get_output_directory()
-            img_path = os.path.join(out_dir, filename)
+            from ..utils.media_paths import resolve_output_file_path
 
-            if os.path.isfile(img_path):
+            subfolder = q.get("subfolder") or ""
+            img_path = resolve_output_file_path(filename, subfolder)
+
+            if img_path:
                 try:
                     if should_block_image_for_current_user(img_path):
                         # Hard global block for this user

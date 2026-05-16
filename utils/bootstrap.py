@@ -2,6 +2,7 @@
 import os
 import uuid
 from ..constants import USERS_FILE, GROUPS_CONFIG_FILE, DEFAULT_GROUP_CONFIG_PATH
+from .ui_defaults import ensure_ui_defaults_config
 from .json_utils import load_json_file, save_json_file
 from .admin_logic import patch_user_group
 from ..globals import logger, users_db
@@ -19,6 +20,7 @@ def load_default_groups():
     return cfg
 
 def ensure_groups_config():
+    """Merge missing roles/keys into groups config. Never deletes the users/ directory."""
     default_cfg = load_default_groups()
     current = load_json_file(GROUPS_CONFIG_FILE, {})
     changed = False
@@ -38,6 +40,8 @@ def ensure_groups_config():
 
     if changed:
         save_json_file(GROUPS_CONFIG_FILE, current)
+
+    ensure_ui_defaults_config()
 
 def ensure_guest_user():
     try:

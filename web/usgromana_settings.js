@@ -1,6 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { ComfyDialog, $el } from "../../scripts/ui.js";
+import { installDenialToastWatcher } from "./js/denial_toasts.js";
 
 const GROUPS = ["admin", "power", "user", "guest"];
 let currentUser = null;
@@ -13,7 +14,7 @@ let groupsConfig = {};
  */
 window.UsgromanaAdminTabs = {
     _tabs: [],
-    _defaultOrder: ["users", "perms", "ip", "env", "nsfw"],
+    _defaultOrder: ["users", "perms", "ui-defaults", "ip", "env", "nsfw"],
     
     /**
      * Register a new tab in the admin panel.
@@ -116,6 +117,7 @@ window.UsgromanaAdminTabs = {
 // Backend API endpoints (adjust if your backend uses different paths)
 const IP_API_ENDPOINT = "/usgromana/api/ip-lists";
 const USER_ENV_API_ENDPOINT = "/usgromana/api/user-env";
+const UI_DEFAULTS_API_ENDPOINT = "/usgromana/api/ui-defaults";
 
 // --- 1. BLOCKING MAP (The Enforcer) ---
 // If a user lacks permission for the Key, these CSS selectors are hidden via !important
@@ -671,6 +673,9 @@ function escapeHtml(text) {
 }
 
 // --- 3. ADMIN DIALOG CLASS ---
+// Global reference to the current dialog instance
+window._usgromanaDialogInstance = null;
+
 class usgromanaDialog extends ComfyDialog {
     constructor() {
         super();
@@ -679,8 +684,25 @@ class usgromanaDialog extends ComfyDialog {
     }
 
     async show() {
+        // Prevent multiple dialogs from being open at the same time
+        if (window._usgromanaDialogInstance && window._usgromanaDialogInstance.overlay && 
+            document.body.contains(window._usgromanaDialogInstance.overlay)) {
+            console.log("[Usgromana] Dialog is already open, focusing existing dialog");
+            // Focus the existing dialog by bringing it to front
+            window._usgromanaDialogInstance.overlay.style.zIndex = "999999";
+            return;
+        }
+        
+        // Store this instance as the current dialog
+        window._usgromanaDialogInstance = this;
+        
         this.overlay.appendChild(this.element);
         document.body.appendChild(this.overlay);
+        
+        // Hide floating button when dialog opens
+        if (window._usgromanaFloatingButton && window._usgromanaFloatingButton.button) {
+            window._usgromanaFloatingButton.button.style.display = "none";
+        }
         this.element.innerHTML = `<div style="padding:50px; text-align:center;">Loading System Configuration...</div>`;
         
         // Fetch fresh data
@@ -712,10 +734,11 @@ class usgromanaDialog extends ComfyDialog {
         // Build tabs HTML (built-in tabs first, then extension tabs)
         const builtInTabs = [
             { id: "users", label: "Users & Roles", order: 0 },
-            { id: "perms", label: "Permissions & UI", order: 1 },
-            { id: "ip", label: "IP Rules", order: 2 },
-            { id: "env", label: "User Env", order: 3 },
-            { id: "nsfw", label: "NSFW Management", order: 4 }
+            { id: "perms", label: "Permissions", order: 1 },
+            { id: "ui-defaults", label: "Default UI", order: 2 },
+            { id: "ip", label: "IP Rules", order: 3 },
+            { id: "env", label: "User Env", order: 4 },
+            { id: "nsfw", label: "NSFW Management", order: 5 }
         ];
         
         // Combine and sort all tabs
@@ -778,6 +801,7 @@ class usgromanaDialog extends ComfyDialog {
         this.renderPerms(this.element.querySelector("#usgromana-tab-perms"));
         await this.renderIpRules(this.element.querySelector("#usgromana-tab-ip"));
         this.renderUserEnv(this.element.querySelector("#usgromana-tab-env"), usersList);
+        await this.renderUiDefaults(this.element.querySelector("#usgromana-tab-ui-defaults"));
         this.renderNsfwManagement(this.element.querySelector("#usgromana-tab-nsfw"));
         
         // Fill Data - Extension tabs
@@ -820,7 +844,25 @@ class usgromanaDialog extends ComfyDialog {
         }
     }
 
-    close() { this.overlay.remove(); }
+    close() { 
+        this.overlay.remove();
+        
+        // Clear the global instance if this is the current dialog
+        if (window._usgromanaDialogInstance === this) {
+            window._usgromanaDialogInstance = null;
+        }
+        
+        // Show floating button when dialog closes
+        if (window._usgromanaFloatingButton && window._usgromanaFloatingButton.button) {
+            window._usgromanaFloatingButton.button.style.display = "flex";
+        }
+    }
+    
+    // Expose dialog class globally for floating button and other extensions
+    static expose() {
+        window.usgromanaDialog = usgromanaDialog;
+        console.log("[Usgromana] usgromanaDialog exposed to window.usgromanaDialog");
+    }
 
 renderUsers(list, container) {
     const currentName = currentUser?.username || null;
@@ -845,8 +887,8 @@ renderUsers(list, container) {
         const isSelf = currentName && uname === currentName;
         const isGuest = uname.toLowerCase() === "guest";
 
-        // NEW: per-user SFW flag; default ON if undefined
-        const sfwEnabled = (u.sfw_check !== false);
+        // Per-user SFW: when enabled, NSFW-tagged images are hidden in gallery and Assets
+        const sfwEnabled = u.sfw_check !== false;
 
         let actionsHtml = `
             <button class="usgromana-btn btn-save" data-user="${uname}">
@@ -1420,8 +1462,9 @@ renderNsfwManagement(container) {
         <div class="usgromana-section">
             <h3>NSFW Content Management</h3>
             <p>
-                Manage NSFW detection and scanning for images in the output directory.
-                Use these tools to scan, fix, or clear NSFW tags from images.
+                NSFW detection and tagging for files on disk. When a user has SFW enabled
+                (Users tab), tagged NSFW images are hidden from the Usgromana Gallery and
+                ComfyUI Media → Assets — this is separate from Default UI assets visibility.
             </p>
 
             <div class="usgromana-row" style="margin-top:16px; gap:8px; flex-wrap:wrap;">
@@ -1521,6 +1564,100 @@ renderNsfwManagement(container) {
         }
     };
 }
+
+    async renderUiDefaults(container) {
+        container.innerHTML = `<div style="padding:20px; text-align:center; color:#c5c8d3;">Loading UI defaults...</div>`;
+
+        const data = await getData(UI_DEFAULTS_API_ENDPOINT);
+        const current = data?.assets_imports_visibility || "user_specific";
+        const allowed = data?.allowed_assets_imports_visibility || [
+            "user_specific",
+            "allow_all",
+            "disable_all",
+        ];
+
+        const UI_DEFAULT_MODES = [
+            { value: "user_specific", header: "USER-SPECIFIC", title: "User-specific (default)" },
+            { value: "allow_all", header: "ALLOW ALL", title: "Allow all" },
+            { value: "disable_all", header: "DISABLE ALL", title: "Disable for all" },
+        ].filter((m) => allowed.includes(m.value));
+
+        const modeCount = UI_DEFAULT_MODES.length;
+
+        const drawSection = (label) =>
+            `<tr class="usgromana-section-row"><td colspan="${modeCount + 1}">${label}</td></tr>`;
+
+        const drawModeRow = (label, settingKey, hint) => {
+            let row = `<tr><td>${escapeHtml(label)}`;
+            if (hint) {
+                row += `<br><span style="font-size:11px;opacity:0.75;font-weight:normal;">${escapeHtml(hint)}</span>`;
+            }
+            row += `</td>`;
+            UI_DEFAULT_MODES.forEach((mode) => {
+                const checked = current === mode.value;
+                row += `<td class="usgromana-check-cell">
+                    <input type="radio"
+                        class="ui-default-mode-chk"
+                        name="usgromana-${settingKey}"
+                        data-setting="${settingKey}"
+                        data-value="${mode.value}"
+                        title="${escapeHtml(mode.title)}"
+                        ${checked ? "checked" : ""} />
+                </td>`;
+            });
+            return row + `</tr>`;
+        };
+
+        container.innerHTML = `<table class="usgromana-table">
+            <thead>
+                <tr>
+                    <th>Feature / Category</th>
+                    ${UI_DEFAULT_MODES.map((m) => `<th class="usgromana-check-cell">${m.header}</th>`).join("")}
+                </tr>
+            </thead>
+            <tbody>
+                ${drawSection("Toggled Default UI Functions")}
+                ${drawModeRow(
+                    "Assets / Imports image visibility",
+                    "assets_imports_visibility",
+                    "Who may see which files in Media → Assets (user-specific / all / none). Does not enable or disable NSFW filtering — that is per-user SFW on the Users tab and always applies to guests in the gallery."
+                )}
+            </tbody>
+        </table>
+        <p id="usgromana-ui-defaults-status" style="margin-top:10px;font-size:12px;color:#9aa0a6;min-height:1.2em;"></p>`;
+
+        const statusEl = container.querySelector("#usgromana-ui-defaults-status");
+
+        const saveSetting = async (settingKey, value) => {
+            statusEl.textContent = "Saving...";
+            statusEl.style.color = "#9aa0a6";
+            try {
+                const res = await api.fetchApi(UI_DEFAULTS_API_ENDPOINT, {
+                    method: "PUT",
+                    body: JSON.stringify({ [settingKey]: value }),
+                });
+                if (res.status === 200) {
+                    statusEl.textContent = "Saved.";
+                    statusEl.style.color = "#7dcea0";
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    statusEl.textContent = err.error || `Error (${res.status})`;
+                    statusEl.style.color = "#ff6b6b";
+                }
+            } catch (e) {
+                console.error("[usgromana] UI defaults save error:", e);
+                statusEl.textContent = "Save failed. See console.";
+                statusEl.style.color = "#ff6b6b";
+            }
+        };
+
+        container.querySelectorAll(".ui-default-mode-chk").forEach((radio) => {
+            radio.onchange = async () => {
+                if (!radio.checked) return;
+                await saveSetting(radio.dataset.setting, radio.dataset.value);
+            };
+        });
+    }
 
     renderPerms(container) {
         // --- SCANNER: Find all Settings Categories ---
@@ -2086,160 +2223,6 @@ function guardUnsavedWorkflowDialog() {
     });
 }
 
-// --- WORKFLOW SAVE DENIED UI HOOKS ---
-
-function showWorkflowDeniedToast(message) {
-    // Simple top-right toast; non-intrusive but visible
-    let existing = document.getElementById("usgromana-workflow-denied-toast");
-    if (existing) {
-        existing.remove();
-    }
-
-const toast = document.createElement("div");
-toast.id = "usgromana-workflow-denied-toast";
-
-// --- Container Styling ---
-Object.assign(toast.style, {
-    position: "fixed",
-    top: "50%",
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: "99999",
-    padding: "14px 18px",
-    maxWidth: "380px",
-    width: "calc(100% - 40px)",
-    borderRadius: "10px",
-    background: "rgba(30, 30, 30, 0.85)",
-    backdropFilter: "blur(6px)",
-    color: "#fff",
-    fontSize: "14px",
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "12px",
-    boxShadow: "0 6px 30px rgba(0,0,0,0.35)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    opacity: "0",
-    transition: "opacity 0.25s ease, transform 0.25s ease",
-});
-
-// --- Content ---
-toast.innerHTML = `
-    <div style="font-size:18px; line-height:1; margin-top:1px;">⛔</div>
-    <div style="flex:1;">
-        <div style="font-weight:600; margin-bottom:3px; font-size:15px;">Action blocked</div>
-        <div style="opacity:0.9;">
-            ${message || "You are not allowed to save or delete workflows with this account."}
-        </div>
-    </div>
-
-    <button id="usgromana-toast-close" style="
-        background:rgba(255,255,255,0.08);
-        border:none;
-        width:24px;
-        height:24px;
-        border-radius:6px;
-        cursor:pointer;
-        font-size:13px;
-        color:#fff;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        transition:background 0.2s;
-    ">✕</button>
-`;
-
-// --- Hover effect on close button ---
-toast.querySelector("#usgromana-toast-close").onmouseover = () =>
-    toast.querySelector("#usgromana-toast-close").style.background =
-        "rgba(255,255,255,0.18)";
-toast.querySelector("#usgromana-toast-close").onmouseout = () =>
-    toast.querySelector("#usgromana-toast-close").style.background =
-        "rgba(255,255,255,0.08)";
-
-toast.querySelector("#usgromana-toast-close").onclick = () => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateX(-50%) translateY(-6px)";
-    setTimeout(() => toast.remove(), 220);
-};
-
-// --- Animate in ---
-setTimeout(() => {
-    toast.style.opacity = "1";
-    toast.style.transform = "translateX(-50%) translateY(0)";
-}, 20);
-
-    document.body.appendChild(toast);
-
-    // Auto-hide after 6s
-    setTimeout(() => {
-        if (toast.parentNode) toast.remove();
-    }, 6000);
-}
-
-function installWorkflowSaveDeniedWatcher() {
-    // Avoid double-wrapping if something reloads
-    if (window.fetch && window.fetch.__usgromanaWrapped) return;
-
-    const originalFetch = window.fetch;
-
-    async function wrappedFetch(input, init) {
-        const response = await originalFetch(input, init);
-
-        try {
-            const url =
-                typeof input === "string"
-                    ? input
-                    : (input && input.url) || "";
-
-            // We only care about 403s on the workflow userdata endpoint
-            if (response.status === 403 && url.includes("/api/userdata/workflows")) {
-                console.debug(
-                    "[usgromana] 403 on workflow endpoint (client-side watcher):",
-                    url
-                );
-
-                let msg = "You are not allowed to perform workflow actions with this account.";
-
-                // Try to peek at the JSON error if present
-                try {
-                    const clone = response.clone();
-                    const data = await clone.json();
-                    if (data && typeof data.error === "string") {
-                        msg = data.error;
-                    }
-                } catch (e) {
-                    // If body isn't JSON or cannot be parsed, just keep the default msg
-                    console.debug("[usgromana] could not parse denied response JSON:", e);
-                }
-
-                // Extra safety: only show toast if this role is actually blocked from saving
-                try {
-                    if (!isWorkflowSaveAllowed()) {
-                        showWorkflowDeniedToast(msg);
-                    } else {
-                        // If somehow a 403 slipped through for an allowed role, just log it
-                        console.warn(
-                            "[usgromana] Got 403 on workflow save despite isWorkflowSaveAllowed() = true. Message:",
-                            msg
-                        );
-                    }
-                } catch (e) {
-                    // If helper blows up for some reason, still show the toast
-                    console.warn("[usgromana] isWorkflowSaveAllowed() check failed:", e);
-                    showWorkflowDeniedToast(msg);
-                }
-            }
-        } catch (e) {
-            console.warn("[usgromana] error in wrappedFetch watcher:", e);
-        }
-
-        return response;
-    }
-
-    wrappedFetch.__usgromanaWrapped = true;
-    window.fetch = wrappedFetch;
-}
-
 // Intercept Ctrl+S / Ctrl+O globally for blocked roles
 window.addEventListener("keydown", (ev) => {
     // Normalize
@@ -2281,12 +2264,33 @@ import("/usgromana/js/logout.js").catch(err => {
 app.registerExtension({
     name: "Usgromana.Settings",
     async setup() {
+        // Expose dialog class globally for floating button and other extensions
+        usgromanaDialog.expose();
+        
         const style = document.createElement("style");
         style.innerHTML = ADMIN_STYLES;
         document.head.appendChild(style);
 
-        // Install backend 403 watcher for workflow save denials
-        installWorkflowSaveDeniedWatcher();
+        installDenialToastWatcher({
+            shouldNotify(url) {
+                const u = (url || "").toLowerCase();
+                if (u.includes("/api/userdata/workflows")) {
+                    try {
+                        return !isWorkflowSaveAllowed();
+                    } catch {
+                        return true;
+                    }
+                }
+                if (
+                    u.includes("comfyui-manager") ||
+                    u.includes("/api/manager") ||
+                    u.includes("/manager")
+                ) {
+                    return true;
+                }
+                return false;
+            },
+        });
 
         // Immediate Enforcement
         setTimeout(updateEnforcementStyles, 500);

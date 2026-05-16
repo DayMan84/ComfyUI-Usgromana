@@ -1,3 +1,9 @@
+"""
+Utils config: legacy/secondary config loader.
+Path-related settings (USERS_FILE, WHITELIST_FILE, BLACKLIST_FILE) are defined in
+constants.py from config.json; this module re-exports them for code that imports
+from .utils so there is a single source of truth.
+"""
 import os
 import warnings
 import uuid
@@ -14,7 +20,7 @@ USER_TEMP_ROOT = COMFY_ROOT / "temp" / "users"
 
 def load_config(file_path: str) -> Dict[str, Any]:
     if os.path.exists(file_path):
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             try:
                 return json.load(f)
             except json.JSONDecodeError:
@@ -39,20 +45,22 @@ TOKEN_ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * config.get("access_token_expiration_hours", 12)
 MAX_TOKEN_EXPIRE_MINUTES = 60 * config.get("max_access_token_expiration_hours", 8760)
 
-USERS_FILE = os.path.join(EXT_PATH, config.get("users_db", "users_db.json"))
+# Re-export from constants so a single source of truth (config.json via constants.py)
+from ..constants import USERS_FILE, WHITELIST_FILE, BLACKLIST_FILE, SEPARATE_USERS
+
 LOG_FILE = os.path.join(EXT_PATH, config.get("log", "Usgromana.log"))
 LOG_LEVELS = config.get("log_levels", ["INFO"])
 
-WHITELIST = os.path.join(EXT_PATH, config.get("whitelist", "whitelist.txt"))
-BLACKLIST = os.path.join(EXT_PATH, config.get("blacklist", "blacklist.txt"))
+# Legacy names for code that expected WHITELIST/BLACKLIST from utils
+WHITELIST = WHITELIST_FILE
+BLACKLIST = BLACKLIST_FILE
 
 BLACKLIST_AFTER_ATTEMPTS = config.get("blacklist_after_attempts")
 
 FREE_MEMORY_ON_LOGOUT = config.get("free_memory_on_logout", False)
 FORCE_HTTPS = config.get("force_https", False)
 
-SEPERATE_USERS = config.get("seperate_users", False)
-
+# Re-export SEPARATE_USERS from constants (config key remains "seperate_users")
 MANAGER_ADMIN_ONLY = config.get("manager_admin_only", False)
 
 WEB_DIR = os.path.join(EXT_PATH, "usgromana-web")
