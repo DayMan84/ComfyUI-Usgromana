@@ -1,0 +1,8 @@
+# Optional dependencies for full NSFW Guard and public API support.
+# Install with: pip install -r requirements-optional.txt
+# Without these, the rest of ComfyUI-Usgromana works; NSFW detection and API will degrade gracefully.
+transformers
+torch
+pillow
+numpy
+piexif

@@ -21,7 +21,7 @@ class Logger:
         self.log_file = log_file
         self.callback = callback
 
-        self.logger = logging.getLogger("Sentinel")
+        self.logger = logging.getLogger("Usgromana")
 
     def log_message(self, level: str, message: str) -> None:
         if level not in self.log_levels:

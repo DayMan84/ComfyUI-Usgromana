@@ -1,0 +1,782 @@
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
+}
+
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+    display: block;
+}
+
+body {
+    line-height: 1;
+}
+
+ol,
+ul {
+    list-style: none;
+}
+
+blockquote,
+q {
+    quotes: none;
+}
+
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+    content: '';
+    content: none;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #202020;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.container {
+    background-color: #18181b;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding: 2.5rem;
+    margin: 2.5rem auto;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    width: auto;
+    color: #ffffff;
+}
+
+.logo {
+    max-width: 128px;
+    max-height: 128px;
+    width: 100%;
+    height: 100%;
+    margin-bottom: 1rem;
+}
+
+.title {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.title.login,
+.title.generate {
+    margin-bottom: 1.5rem
+}
+
+.subtitle {
+    text-align: left;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+}
+
+.divider {
+    display: flex;
+    width: 100%;
+    position: relative;
+    align-items: center;
+    margin: 1rem 0 1.5rem 0;
+}
+
+.divider::after {
+    position: absolute;
+    display: block;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    content: "";
+    border-top: 1px solid #3f3f46;
+}
+
+.divider.vertical {
+    rotate: 180deg;
+    margin: 1.5rem 1.5rem 0.5rem 1.5rem;
+}
+
+.divider.vertical::after {
+    rotate: 180deg;
+    width: 0;
+    height: 100%;
+    top: 0;
+    left: 50%;
+    border-left: 1px solid #3f3f46;
+}
+
+.form-fields {
+    display: flex;
+}
+
+.form-field {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 14px;
+}
+
+input {
+    background-color: #09090b;
+    color: #ffffff;
+    width: 250px;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border: 1px solid #3f3f46;
+    border-radius: 0.25rem;
+    transition: 0.2s;
+    outline: None;
+}
+
+input:enabled:hover {
+    border-color: #52525b;
+}
+
+input:enabled:focus {
+    border-color: #60a5fa;
+}
+
+input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input.error {
+    border-color: #ef4444;
+}
+
+.btn {
+    width: 100%;
+    padding: 0.5rem;
+    background-color: #60a5fa;
+    border: 1px solid #60a5fa;
+    color: #18181b;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn:not(:disabled):hover {
+    background-color: #92c5fd;
+    border: 1px solid #92c5fd;
+}
+
+.btn:active {
+    background-color: #bae6fd !important;
+    border: 1px solid #bae6fd !important;
+}
+
+a {
+    background-color: #1e3a8a;
+    color: #60a5fa;
+    text-decoration: none;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    transition: 0.2s;
+}
+
+a:hover {
+    color: #bfdbfe;
+}
+
+a:active {
+    background-color: #1e40af !important;
+}
+
+.toast-container {
+    position: fixed;
+    top: 15px;
+    right: 55px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+}
+
+.toast-container .toast {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    padding: 20px;
+    max-width: 400px;
+    text-align: left;
+    word-wrap: break-word;
+    transition: opacity 1s;
+    min-width: 150px;
+    opacity: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.toast-container .toast.show {
+    opacity: 1;
+}
+
+.toast-container .toast.hide {
+    opacity: 0;
+}
+
+.toast-container .toast.success {
+    background-color: #22c55e35;
+    color: #22c55e;
+    border: 1px solid #22c55e;
+}
+
+.toast-container .toast.info {
+    background-color: #3b83f635;
+    color: #3b82f6;
+    border: 1px solid #3b82f6;
+}
+
+.toast-container .toast.error {
+    background-color: #ef444435;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
+
+@media (max-width: 780px) {
+    .form-fields {
+        display: block;
+    }
+
+    .title {
+        margin-bottom: 1.5rem
+    }
+
+    .subtitle {
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 420px) {
+    body {
+        background: #18181b;
+    }
+
+    .container {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        border: none;
+        margin: 0;
+        padding: 0 2rem;
+        min-height: 100vh;
+    }
+}
+
+/* === LIGHT MODE ===================================================== */
+
+@media (prefers-color-scheme: light) {
+    body {
+        background: #f4f5f7;
+        color: #111;
+    }
+
+    .container {
+        background-color: #ffffff;
+        border-color: #d4d4d8;
+        color: #111;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    input {
+        background: #fafafa;
+        border-color: #d4d4d8;
+        color: #111;
+    }
+
+    input:enabled:focus {
+        border-color: #3b82f6;
+    }
+
+    .btn {
+        background-color: #8e8e8f;
+        border-color: #3f3f3f;
+        color: #fff;
+    }
+
+    .btn:not(:disabled):hover {
+        background-color: #60cefa;
+        border-color: #60cefa;
+    }
+
+    a {
+        background-color: #e0e7ff;
+        color: #1e3a8a;
+    }
+}
+
+/* === DARK MODE ====================================================== */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #202020;
+        color: #ffffff;
+    }
+
+    .container {
+        background-color: #18181b;
+        border-color: #3f3f46;
+        color: #ffffff;
+    }
+
+    input {
+        background-color: #09090b;
+        color: #ffffff;
+        border-color: #3f3f46;
+    }
+
+    input:enabled:focus {
+        border-color: #60a5fa;
+    }
+
+    .btn {
+        background-color: #9660fa;
+        border-color: #7c60fa;
+        color: #18181b;
+    }
+}
+
+/* === USGROMANA FLOATING BUTTON ========================================== */
+
+.usgromana-floating-button {
+    position: fixed !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    max-width: 48px !important;
+    max-height: 48px !important;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #42176977 0%, #511eaf81 100%);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4),
+                0 0 0 2px rgba(255, 255, 255, 0.1);
+    cursor: grab !important;
+    z-index: 999999 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s ease, box-shadow 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto !important;
+    touch-action: none;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+    /* Ensure it's not affected by parent transforms */
+    isolation: isolate;
+}
+
+.usgromana-floating-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(82, 25, 214, 0.363),
+                0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+.usgromana-floating-button.dragging {
+    cursor: grabbing;
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(100, 59, 246, 0.63),
+                0 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.usgromana-floating-button-icon {
+    width: 32px !important;
+    height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    min-width: 32px;
+    min-height: 32px;
+    object-fit: contain;
+    object-position: center;
+    pointer-events: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    display: block !important;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+}
+
+/* === RADIAL MENU ========================================================= */
+
+.usgromana-radial-menu {
+    position: fixed;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 10001;
+    transform-origin: center;
+}
+
+.usgromana-radial-menu.active {
+    pointer-events: auto;
+}
+
+.usgromana-radial-menu-button {
+    position: absolute;
+    left: 0;
+    top: 0;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 50% !important;
+
+    background: rgba(30, 30, 30, 0.98) !important;
+    backdrop-filter: blur(10px);
+
+    border: 3px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    
+    /* Ensure each button is clearly separated */
+    isolation: isolate;
+    overflow: hidden;
+
+    cursor: pointer !important;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    
+    /* Prevent text selection and dragging */
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+
+    /* Start hidden at the center (behind the main button) */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform:
+        translate(-50%, -50%)
+        translate(0px, 0px)
+        scale(0);
+
+    transform-origin: center;
+    will-change: transform, opacity;
+    
+    /* Smooth transitions for hover and click animations */
+    transition: background 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.2s ease;
+}
+
+.usgromana-radial-menu.active .usgromana-radial-menu-button {
+    pointer-events: auto;
+}
+
+/* Only show buttons when menu is active AND button has animate-in class */
+.usgromana-radial-menu.active .usgromana-radial-menu-button.animate-in {
+    visibility: visible;
+    pointer-events: auto !important;
+    transition-delay: 0s;
+}
+
+.usgromana-radial-menu-button.animate-in {
+    /* Ensure transition is active with delay from CSS variable */
+    transition: transform 0.32s cubic-bezier(.2,.9,.2,1), 
+                opacity 0.32s cubic-bezier(.2,.9,.2,1),
+                background 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                filter 0.2s ease;
+    transition-delay: var(--delay, 0s);
+}
+
+.usgromana-radial-menu-button.animate-out {
+    transition: transform 0.22s cubic-bezier(.2,.9,.2,1), 
+                opacity 0.22s cubic-bezier(.2,.9,.2,1);
+    transition-delay: var(--delay, 0s);
+}
+
+/* Hover animation: enhanced scale up with color change and glow */
+/* Must override animate-in transition */
+.usgromana-radial-menu-button:hover,
+.usgromana-radial-menu-button.animate-in:hover,
+.usgromana-radial-menu-button.hover-active {
+    background: rgba(59, 130, 246, 0.98) !important;
+    border-color: rgba(255, 255, 255, 0.7) !important;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.9),
+                0 0 20px rgba(59, 130, 246, 0.6),
+                0 0 0 3px rgba(255, 255, 255, 0.5),
+                inset 0 1px 3px rgba(255, 255, 255, 0.4) !important;
+    /* Scale up on hover with bounce effect - works with existing transform structure */
+    transform: translate(-50%, -50%) translate(var(--dx, 0px), var(--dy, 0px)) scale(1.5) !important;
+    filter: brightness(1.2) saturate(1.4) !important;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                background 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                border-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                box-shadow 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+                filter 0.3s ease !important;
+}
+
+/* Click animation: enhanced scale down with feedback */
+.usgromana-radial-menu-button:active,
+.usgromana-radial-menu-button.animate-in:active {
+    filter: brightness(0.85) saturate(0.9) !important;
+    transform: translate(-50%, -50%) translate(var(--dx, 0px), var(--dy, 0px)) scale(0.8) !important;
+    box-shadow: 0 3px 8px rgba(59, 130, 246, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.2),
+                inset 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1) !important,
+                filter 0.12s ease !important,
+                background 0.12s ease !important,
+                border-color 0.12s ease !important,
+                box-shadow 0.12s ease !important;
+}
+
+.usgromana-radial-menu-button-icon {
+    font-size: 16px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    pointer-events: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.usgromana-radial-menu-button-label {
+    display: none !important; /* Hidden by default, shown as tooltip */
+}
+
+.usgromana-radial-menu-button-tooltip {
+    position: fixed !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    color: #ffffff !important;
+    padding: 8px 14px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    z-index: 999999 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8),
+                0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease, transform 0.3s ease !important;
+    display: none !important;
+    transform: translateY(-50%) !important;
+    max-width: 200px !important;
+    word-wrap: break-word !important;
+    visibility: hidden !important;
+    top: 0 !important;
+    left: 0 !important;
+}
+
+.usgromana-radial-menu-button-tooltip.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: translateY(-50%) !important;
+}
+
+@keyframes radialButtonIn {
+    from {
+        opacity: 0;
+        transform:
+            translate(-50%, -50%)
+            translate(0px, 0px)
+            scale(0);
+    }
+    to {
+        opacity: 1;
+        transform:
+            translate(-50%, -50%)
+            translate(var(--dx, 0px), var(--dy, 0px))
+            scale(1);
+    }
+}
+
+@keyframes radialButtonOut {
+    from {
+        opacity: 1;
+        transform:
+            translate(-50%, -50%)
+            translate(var(--dx, 0px), var(--dy, 0px))
+            scale(1);
+    }
+    to {
+        opacity: 0;
+        transform:
+            translate(-50%, -50%)
+            translate(0px, 0px)
+            scale(0);
+    }
+}
+
+/* Light mode support for floating button */
+@media (prefers-color-scheme: light) {
+    .usgromana-floating-button {
+        background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5),
+                    0 0 0 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .usgromana-radial-menu-button {
+        background: rgba(255, 255, 255, 0.95);
+        border-color: rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
+                    0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .usgromana-radial-menu-button-label {
+        color: #1f2937;
+    }
+
+    .usgromana-radial-menu-button:hover {
+        background: rgba(59, 130, 246, 0.95);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+}

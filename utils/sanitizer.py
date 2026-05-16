@@ -41,11 +41,14 @@ class Sanitizer:
         return value
 
     def create_sanitizer_middleware(self) -> web.middleware:
-        """Create middleware to sanitize all request inputs."""
+        """Create middleware to sanitize request inputs.
+        Sanitization applies to form POST body (request.post()) and query parameters.
+        JSON request bodies (e.g. workflow save, admin APIs) are not sanitized.
+        """
 
         @web.middleware
         async def sanitizer_middleware(request: web.Request, handler) -> web.Response:
-            """Middleware to sanitize all request inputs."""
+            """Sanitize form POST and query only; JSON bodies are not sanitized."""
             if request.can_read_body:
                 try:
                     data = await request.post()
@@ -53,8 +56,8 @@ class Sanitizer:
                         key: self.sanitize_input(value) for key, value in data.items()
                     }
                     request["_sanitized_data"] = sanitized_data
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[Usgromana] Sanitizer: failed to parse POST body: {e}")
 
             if request.query:
                 sanitized_query = {

@@ -1,0 +1,13 @@
+# Live Usgromana data (keep defaults templates in repo)
+users/users.json
+users/users_db.json
+users/usgromana_groups.json
+users/usgromana_ui_defaults.json
+users/whitelist.txt
+users/blacklist.txt
+!users/defaults/
+
+usgromana.log
+*.pyc
+__pycache__/
+.pytest_cache/

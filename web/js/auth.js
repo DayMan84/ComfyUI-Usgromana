@@ -252,7 +252,7 @@ async function login(event) {
   event.preventDefault();
 
   if (!isTimedOut()) {
-    const button = event.submitter;
+    const button = event.submitter || document.querySelector("#login-form button[type='submit']");
     const form = document.getElementById("login-form");
     const formData = new FormData(form);
     const usernameField = document.getElementById("username");
@@ -272,15 +272,21 @@ async function login(event) {
       const result = await response.json();
 
       if (response.ok) {
-        let cookieString = `jwt_token=${result.token}; path=/; HttpOnly; SameSite=Strict`;
+        // backend should return { message, token } (and optionally jwt_token)
+        const token = result.token || result.jwt_token;
+        if (!token) {
+          addToast("Login succeeded but no token was returned", "error");
+        } else {
+          let cookieString = `jwt_token=${token}; path=/; HttpOnly; SameSite=Strict`;
 
-        if (window.location.protocol === "https:") {
-          cookieString += "; Secure";
+          if (window.location.protocol === "https:") {
+            cookieString += "; Secure";
+          }
+
+          document.cookie = cookieString;
         }
 
-        document.cookie = cookieString;
-        // localStorage.setItem("Comfy.userId", result.user_settings_id);
-        addToast(result.message, "success");
+        addToast(result.message || "Login successful", "success");
         window.location.href = "/";
       } else {
         usernameField.classList.add("error");
@@ -293,6 +299,74 @@ async function login(event) {
       button.disabled = false;
       button.textContent = "Login";
     }
+  }
+}
+
+async function guestLogin(event) {
+  event.preventDefault();
+
+  if (isTimedOut()) {
+    return;
+  }
+
+  const form = document.getElementById("login-form");
+  const guestFlag = document.getElementById("guest_login_flag");
+  const loginButton = form.querySelector("button[type='submit']");
+  const guestButton = event.target;
+
+  // ensure flag exists / set to true
+  if (guestFlag) {
+    guestFlag.value = "true";
+  }
+
+  // clear username/password; backend ignores them on guest path anyway
+  const usernameField = document.getElementById("username");
+  const passwordField = document.getElementById("password");
+  if (usernameField) usernameField.value = "";
+  if (passwordField) passwordField.value = "";
+
+  try {
+    guestButton.disabled = true;
+    guestButton.textContent = "Signing in as guest...";
+    if (loginButton) loginButton.disabled = true;
+
+    const formData = new FormData(form);
+
+    const response = await fetch("/login", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      const token = result.token || result.jwt_token;
+      if (token) {
+        let cookieString = `jwt_token=${token}; path=/; HttpOnly; SameSite=Strict`;
+        if (window.location.protocol === "https:") {
+          cookieString += "; Secure";
+        }
+        document.cookie = cookieString;
+      }
+
+      addToast(result.message || "Guest login successful", "success");
+      window.location.href = "/";
+    } else {
+      addToast(result.error || result.message || "Guest login failed", "error");
+    }
+
+    updateFailedAttempts(response.status, result, "login");
+  } catch (error) {
+    addToast("An error occurred: " + error.message, "error");
+  } finally {
+    guestButton.disabled = false;
+    guestButton.textContent = "Guest Login";
+    if (loginButton) {
+      loginButton.disabled = false;
+      loginButton.textContent = "Login";
+    }
+    // reset flag so normal login stays normal
+    if (guestFlag) guestFlag.value = "false";
   }
 }
 

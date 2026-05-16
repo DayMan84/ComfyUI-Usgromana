@@ -4,16 +4,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ComfyUI Sentinel - Register</title>
+    <title>ComfyUI Usgromana - Register</title>
 
-    <link rel="icon" href="/sentinel/assets/icon.ico" type="image/x-icon">
+    <link rel="icon" href="/usgromana/assets/light_icon.ico" type="image/x-icon">
 
-    <link rel="stylesheet" type="text/css" href="/sentinel/css/styles.css">
+    <!-- Light mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/light_icon.ico"
+        media="(prefers-color-scheme: light)">
+
+    <!-- Dark mode favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="/usgromana/assets/dark_icon.ico"
+        media="(prefers-color-scheme: dark)">
+
+    <link rel="stylesheet" type="text/css" href="/usgromana/css/styles.css">
 </head>
 
 <body data-admin-user="{{ X-Admin-User }}">
     <div class="container">
-        <img class="logo" src="/sentinel/assets/logo_transparent.png" alt="Transparent Logo">
+        <picture>
+            <!-- Dark mode neon logo -->
+            <source srcset="/usgromana/assets/dark_logo_transparent.png"
+                    media="(prefers-color-scheme: dark)">
+            <!-- Light mode metallic logo -->
+            <source srcset="/usgromana/assets/light_logo_transparent.png"
+                    media="(prefers-color-scheme: light)">
+            <img class="logo"
+                src="/usgromana/assets/logo_transparent.png"
+                alt="USG Logo">
+        </picture>
         <h1 class="title register">Register</h1>
         <form id="register-form" onsubmit="register(event)">
             <div class="form-fields">
@@ -51,6 +71,6 @@
     </div>
     <div class="toast-container" id="toasts"></div>
 </body>
-<script src="/sentinel/js/auth.js"></script>
+<script src="/usgromana/js/auth.js"></script>
 
 </html>

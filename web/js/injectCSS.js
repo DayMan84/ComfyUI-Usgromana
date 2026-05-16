@@ -1,12 +1,12 @@
-import { $el } from "/scripts/ui.js";
+import { $el } from "../../scripts/ui.js";
 
 $el("style", {
   textContent: `
-  .sentinel-logout {
+  .usgromana-logout {
     color: var(--p-red-600) !important;
   }
   
-  .sentinel-logout:hover {
+  .usgromana-logout:hover {
     background: var(--p-red-600) !important;
     color: var(--p-red-300) !important;
   }
