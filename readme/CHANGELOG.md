@@ -5,6 +5,17 @@ This project follows a semantic-style versioning flow adapted for active develop
 
 ---
 
+## **v2.0.3 — ComfyUI 0.33 Asset Scanner Compatibility (2026-08-24)**
+
+### 🐛 Bug Fixes
+- **ComfyUI 0.33 import crash** — `_patch_asset_scanner_prefixes()` in `utils/comfy_user_bridge.py` now resolves `get_scan_prefixes_for_root` (0.33+) with a fallback to `get_prefixes_for_root` (pre-0.33), and patches both names so the extension loads on either API
+- **Auth lockout on failed import** — fixes the partial-load failure where JWT middleware installed but login routes never registered, causing every request to return `{"error": "Authentication required"}` ([#24](https://github.com/DayMan84/ComfyUI-Usgromana/issues/24))
+
+### 📄 Documentation
+- README, CHANGELOG, and login page updated to reflect v2.0.3 as the current release
+
+---
+
 ## **v2.0.2 — Auth, API Tokens & IP Auto-Blacklist (2026-06-15)**
 
 ### 🔑 Authentication & API Tokens

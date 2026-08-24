@@ -1383,10 +1383,15 @@ def _patch_asset_scanner_prefixes() -> None:
     if getattr(asset_scanner, "_usgromana_prefix_patched", False):
         return
 
-    original_prefixes = asset_scanner.get_prefixes_for_root
-    original_collect = asset_scanner.collect_paths_for_roots
+    original_prefixes = getattr(
+        asset_scanner,
+        "get_scan_prefixes_for_root",
+        getattr(asset_scanner, "get_prefixes_for_root", None),
+    )
+    if original_prefixes is None:
+        return
 
-    def get_prefixes_for_root(root):
+    def get_scan_prefixes_for_root(root):
         if root == "output":
             return [os.path.abspath(_global_output_root())]
         if root == "input":
@@ -1403,7 +1408,8 @@ def _patch_asset_scanner_prefixes() -> None:
             paths.extend(list_files_recursively(_global_output_root()))
         return paths
 
-    asset_scanner.get_prefixes_for_root = get_prefixes_for_root
+    asset_scanner.get_scan_prefixes_for_root = get_scan_prefixes_for_root
+    asset_scanner.get_prefixes_for_root = get_scan_prefixes_for_root
     asset_scanner.collect_paths_for_roots = collect_paths_for_roots
     asset_scanner._usgromana_prefix_patched = True
     _patch_asset_scanner_build_specs()
