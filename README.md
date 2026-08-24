@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 2.0.2</strong> — API token generation restored, configurable auto-blacklist on failed logins, and auth/login fixes
+  <strong>Version 2.0.3</strong> — Compatible with ComfyUI 0.33 asset scanner rename; fixes auth lockout on failed plugin import ([#24](https://github.com/DayMan84/ComfyUI-Usgromana/issues/24)) Thank you @passiony for the fix.
 </p>
 
 ---
@@ -656,7 +656,7 @@ in `usgromana_groups.json`.
 
 Release history is maintained in [CHANGELOG.md](./CHANGELOG.md) (same content as [readme/CHANGELOG.md](./readme/CHANGELOG.md)).
 
-**Latest: v2.0.2** — API token generation restored, configurable auto-blacklist on failed logins, and auth/login fixes.
+**Latest: v2.0.3** — Compatible with ComfyUI 0.33 asset scanner rename; fixes auth lockout on failed plugin import ([#24](https://github.com/DayMan84/ComfyUI-Usgromana/issues/24)). Thanks to @passiony for the fix.
 
 ---
 
