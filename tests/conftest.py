@@ -25,3 +25,14 @@ if "folder_paths" not in sys.modules:
     _fp = type(sys)("folder_paths")
     _fp.base_path = os.path.join(_root, "fake_comfy_root")
     sys.modules["folder_paths"] = _fp
+
+# access_control imports PromptQueue at module import time
+if "execution" not in sys.modules:
+    _execution = type(sys)("execution")
+
+    class _PromptQueue:
+        pass
+
+    _execution.PromptQueue = _PromptQueue
+    _execution.MAXIMUM_HISTORY_SIZE = 10000
+    sys.modules["execution"] = _execution

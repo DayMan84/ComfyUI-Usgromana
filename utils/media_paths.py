@@ -95,21 +95,20 @@ def gallery_scan_folder_paths(
     Per-user folder_paths patching hides global output/; gallery must scan:
     - allow_all: entire global output tree
     - user_specific: output/<user_id>/ only
-    """
-    import folder_paths
 
+    The override is context-local. Swapping ``folder_paths.get_*_directory``
+    on the process raced the prompt worker and saved images into the wrong user
+    folder.
+    """
     mode = visibility_mode
     ac = access_control
-    saved = (
-        folder_paths.get_output_directory,
-        folder_paths.get_input_directory,
-        folder_paths.get_temp_directory,
-    )
 
     if mode == ASSETS_VISIBILITY_ALLOW_ALL:
-        folder_paths.get_output_directory = ac._AccessControl__get_output_directory
-        folder_paths.get_input_directory = ac._AccessControl__get_input_directory
-        folder_paths.get_temp_directory = ac._AccessControl__get_temp_directory
+        override = dict(
+            output=ac._AccessControl__get_output_directory,
+            input_directory=ac._AccessControl__get_input_directory,
+            temp=ac._AccessControl__get_temp_directory,
+        )
     elif mode == ASSETS_VISIBILITY_USER_SPECIFIC and user_id:
         base_out = os.path.abspath(ac._AccessControl__get_output_directory())
         base_in = os.path.abspath(ac._AccessControl__get_input_directory())
@@ -117,15 +116,15 @@ def gallery_scan_folder_paths(
         user_in = os.path.join(base_in, user_id)
         os.makedirs(user_out, exist_ok=True)
         os.makedirs(user_in, exist_ok=True)
-
-        folder_paths.get_output_directory = lambda uo=user_out: uo
-        folder_paths.get_input_directory = lambda ui=user_in: ui
-        folder_paths.get_temp_directory = ac._AccessControl__get_temp_directory
-    # disable_all / no user: leave patched getters as-is
-
-    try:
+        override = dict(
+            output=lambda uo=user_out: uo,
+            input_directory=lambda ui=user_in: ui,
+            temp=ac._AccessControl__get_temp_directory,
+        )
+    else:
+        # disable_all / no user: leave patched getters as-is
         yield
-    finally:
-        folder_paths.get_output_directory = saved[0]
-        folder_paths.get_input_directory = saved[1]
-        folder_paths.get_temp_directory = saved[2]
+        return
+
+    with ac.directory_override(**override):
+        yield
