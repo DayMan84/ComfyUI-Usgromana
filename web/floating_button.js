@@ -1349,28 +1349,48 @@ class UsgromanaFloatingButton {
 }
 
 // --- Extension Detection for Radial Menu ---
-function detectExtensionsForRadialMenu() {
-    if (window.location.pathname.includes("gallery") || 
-        document.querySelector('[href*="gallery"]') ||
-        window.UsgromanaGallery) {
-        if (!window.UsgromanaRadialMenu._buttons.some(b => b.id === "gallery")) {
-            window.UsgromanaRadialMenu.register({
-                id: "gallery",
-                label: "Gallery",
-                icon: "🖼️",
-                order: 10,
-                onClick: () => {
-                    if (window.UsgromanaGallery && typeof window.UsgromanaGallery.open === "function") {
-                        window.UsgromanaGallery.open();
-                    } else if (window.location.pathname !== "/usgromana-gallery") {
-                        window.location.href = "/usgromana-gallery";
-                    }
-                }
-            });
+function galleryAddonIsInstalled() {
+    return window.location.pathname.includes("gallery")
+        || !!document.querySelector("#usg-gallery-launch-btn")
+        || !!document.querySelector('[href*="gallery"]')
+        || !!window.UsgromanaGallery;
+}
+
+function registerDetectedGalleryButton() {
+    if (!window.UsgromanaRadialMenu) return false;
+    if (window.UsgromanaRadialMenu._buttons.some(b => b.id === "gallery")) return true;
+    if (!galleryAddonIsInstalled()) return false;
+    window.UsgromanaRadialMenu.register({
+        id: "gallery",
+        label: "Gallery",
+        icon: "🖼️",
+        order: 10,
+        onClick: () => {
+            const launch = document.querySelector("#usg-gallery-launch-btn");
+            if (launch) {
+                launch.click();
+                return;
+            }
+            if (window.UsgromanaGallery && typeof window.UsgromanaGallery.open === "function") {
+                window.UsgromanaGallery.open();
+                return;
+            }
+            if (window.location.pathname !== "/usgromana-gallery") {
+                window.location.href = "/usgromana-gallery";
+            }
         }
-    }
-    // Note: Extensions should explicitly register themselves using window.UsgromanaRadialMenu.register()
-    // Auto-detection removed to prevent non-functional buttons from appearing
+    });
+    return true;
+}
+
+function detectExtensionsForRadialMenu() {
+    if (registerDetectedGalleryButton()) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+        tries += 1;
+        if (registerDetectedGalleryButton() || tries >= 20) clearInterval(timer);
+    }, 500);
+    // Extensions can also register themselves with window.UsgromanaRadialMenu.register()
 }
 
 // --- Initialize Floating Button ---
