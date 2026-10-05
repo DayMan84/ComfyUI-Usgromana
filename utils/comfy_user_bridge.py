@@ -1460,18 +1460,14 @@ def _patch_asset_path_utils() -> None:
     original = pu.get_asset_category_and_relative_path
 
     def classify_with_global_roots(file_path: str):
-        saved_out = folder_paths.get_output_directory
-        saved_in = folder_paths.get_input_directory
-        saved_tmp = folder_paths.get_temp_directory
-        folder_paths.get_output_directory = access_control._AccessControl__get_output_directory
-        folder_paths.get_input_directory = access_control._AccessControl__get_input_directory
-        folder_paths.get_temp_directory = access_control._AccessControl__get_temp_directory
-        try:
+        # Context-local: do not swap folder_paths getters process-wide.
+        # The prompt worker may be saving images on another thread.
+        with access_control.directory_override(
+            output=access_control._AccessControl__get_output_directory,
+            input_directory=access_control._AccessControl__get_input_directory,
+            temp=access_control._AccessControl__get_temp_directory,
+        ):
             return original(file_path)
-        finally:
-            folder_paths.get_output_directory = saved_out
-            folder_paths.get_input_directory = saved_in
-            folder_paths.get_temp_directory = saved_tmp
 
     pu.get_asset_category_and_relative_path = classify_with_global_roots
     pu._usgromana_path_patched = True
