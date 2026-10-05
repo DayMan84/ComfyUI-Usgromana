@@ -19,7 +19,7 @@ from .globals import (
 )
 from .utils import watcher
 from .utils.bootstrap import ensure_groups_config
-from .routes import static, auth, admin, user, workflow_routes, image_shares
+from .routes import static, auth, admin, user, workflow_routes
 from .utils.sfw_intercept.reactor_sfw_intercept import _load_reactor_module
 from .utils.sfw_intercept.nsfw_guard import (
     should_block_image_for_current_user,

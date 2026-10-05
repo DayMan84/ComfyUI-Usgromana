@@ -20,7 +20,6 @@ from aiohttp import web
 
 from ..constants import SEPARATE_USERS
 from .media_paths import (
-    gallery_scan_folder_paths,
     global_input_directory,
     global_output_directory,
     global_temp_directory,
@@ -1698,170 +1697,6 @@ def _request_wants_generated_assets(request: web.Request) -> bool:
     return "output" in tags
 
 
-def _jwt_user_from_request(request) -> tuple[str | None, str | None]:
-    """Identify the caller from the Usgromana JWT, ignoring spoofable Comfy-User headers."""
-    if request is None:
-        return None, None
-    from ..globals import jwt_auth, users_db
-
-    token = jwt_auth.get_token_from_request(request)
-    if not token:
-        return None, None
-    try:
-        payload = jwt_auth.decode_access_token(token)
-    except Exception:
-        return None, None
-    username = payload.get("username")
-    user_id = payload.get("id")
-    if not username or not user_id:
-        return None, None
-    stored_id, _record = users_db.get_user(str(username))
-    if stored_id != user_id:
-        return None, None
-    request["user_id"] = str(user_id)
-    request["user"] = str(username)
-    return str(user_id), str(username)
-
-
-def _gallery_shared_file(request, viewer_user_id, viewer_username):
-    """Serve a shared image, or None when this request is not a share reference."""
-    if request.method != "GET" or not request.path.rstrip("/").endswith("/image"):
-        return None
-    filename = request.rel_url.query.get("filename") or ""
-    from .image_shares import parse_shared_relpath
-
-    if parse_shared_relpath(filename) is None:
-        return None
-    from .image_share_access import shared_file_response_path
-
-    try:
-        file_path = shared_file_response_path(filename, viewer_user_id, viewer_username)
-    except PermissionError:
-        return web.json_response({"ok": False, "error": "Access denied"}, status=403)
-    except FileNotFoundError:
-        return web.json_response({"ok": False, "error": "File not found"}, status=404)
-    if not file_path:
-        return None
-    try:
-        from .sfw_intercept.nsfw_guard import should_block_image_for_current_user
-
-        if should_block_image_for_current_user(file_path):
-            return web.json_response(
-                {"ok": False, "error": "Access denied: NSFW content blocked"},
-                status=403,
-            )
-    except Exception:
-        pass
-    if request.rel_url.query.get("size") == "thumb":
-        body, content_type = _thumbnail_bytes(file_path)
-        return web.Response(body=body, content_type=content_type)
-    return web.FileResponse(file_path)
-
-
-def _thumbnail_bytes(path: str) -> tuple[bytes, str]:
-    import mimetypes
-
-    try:
-        import io
-
-        from PIL import Image
-
-        with Image.open(path) as image:
-            image = image.convert("RGB")
-            image.thumbnail((512, 512))
-            buffer = io.BytesIO()
-            image.save(buffer, format="JPEG", quality=80)
-            return buffer.getvalue(), "image/jpeg"
-    except Exception:
-        with open(path, "rb") as handle:
-            guessed = mimetypes.guess_type(path)[0] or "application/octet-stream"
-            return handle.read(), guessed
-
-
-@contextmanager
-def _forced_gallery_root(root_dir: str) -> Iterator[None]:
-    """Point the gallery addon's root getter at one account's output folder.
-
-    The gallery binds ``get_gallery_root_dir`` into its route module at import
-    time, and a custom rootGalleryFolder can ignore folder_paths. Replacing
-    both bindings for the duration of the request keeps listing and file
-    serving inside the caller's directory.
-    """
-    import sys
-
-    def forced() -> str:
-        return root_dir
-
-    saved: list[tuple[object, object]] = []
-    for mod in list(sys.modules.values()):
-        if mod is None:
-            continue
-        current = getattr(mod, "get_gallery_root_dir", None)
-        if not callable(current):
-            continue
-        code = getattr(current, "__code__", None)
-        filename = (getattr(code, "co_filename", None) or "").replace("\\", "/")
-        if "Usgromana-Gallery" not in filename and "usgromana_gallery" not in filename:
-            continue
-        saved.append((mod, current))
-        setattr(mod, "get_gallery_root_dir", forced)
-    try:
-        yield
-    finally:
-        for mod, original in saved:
-            setattr(mod, "get_gallery_root_dir", original)
-
-
-def _gallery_user_output_dir(user_id: str | None) -> str:
-    if user_id:
-        root = os.path.join(global_output_directory(), user_id)
-    else:
-        root = os.path.join(global_output_directory(), ".usgromana-no-user")
-    os.makedirs(root, exist_ok=True)
-    return os.path.abspath(root)
-
-
-def _gallery_list_with_shares(response, viewer_user_id, viewer_username):
-    """Keep only the caller's own files, then append images shared with them."""
-    body = getattr(response, "body", None)
-    if response.status != 200 or body is None:
-        return response
-    if isinstance(body, memoryview):
-        body = body.tobytes()
-    try:
-        payload = json.loads(body)
-    except (TypeError, json.JSONDecodeError):
-        return response
-    if not isinstance(payload, dict) or not isinstance(payload.get("images"), list):
-        return response
-
-    from .image_share_access import gallery_entries_shared_with, get_share_store
-
-    store = get_share_store()
-    own_images = []
-    for image in payload["images"]:
-        if not isinstance(image, dict):
-            continue
-        relpath = image.get("relpath") or image.get("filename")
-        if store.resolve_owned_file(viewer_user_id, relpath):
-            own_images.append(image)
-    shared_images = gallery_entries_shared_with(viewer_user_id, viewer_username)
-    payload["images"] = own_images + shared_images
-    if shared_images:
-        folders = payload.get("folders")
-        if not isinstance(folders, list):
-            folders = []
-        if not any(isinstance(folder, dict) and folder.get("path") == "Shared with you" for folder in folders):
-            folders.append(
-                {
-                    "path": "Shared with you",
-                    "name": "Shared with you",
-                    "count": len(shared_images),
-                }
-            )
-        payload["folders"] = folders
-    return web.json_response(payload, status=200)
-
 
 def create_comfy_user_middleware():
     """Middleware: sync JWT user into ComfyUI user manager."""
@@ -1925,42 +1760,17 @@ def create_comfy_user_middleware():
                 status=200,
             )
 
-        if path.startswith("/usgromana-gallery"):
-            if (
-                assets_mode == ASSETS_VISIBILITY_DISABLE_ALL
-                and path.rstrip("/").endswith("/list")
-                and request.method == "GET"
-            ):
-                return web.json_response(
-                    {"ok": True, "images": [], "folders": []},
-                    status=200,
-                )
-            gallery_user_id, gallery_username = _jwt_user_from_request(request)
-            if gallery_user_id:
-                access_control.set_current_user_id(gallery_user_id)
-                try:
-                    from ..globals import current_username_var
-
-                    current_username_var.set(gallery_username)
-                except Exception:
-                    pass
-            shared_file = _gallery_shared_file(request, gallery_user_id, gallery_username)
-            if shared_file is not None:
-                return shared_file
-            gallery_root = _gallery_user_output_dir(gallery_user_id)
-            with gallery_scan_folder_paths(
-                ASSETS_VISIBILITY_USER_SPECIFIC, gallery_user_id
-            ), _forced_gallery_root(gallery_root):
-                response = await handler(request)
-            if (
-                request.method == "GET"
-                and path.rstrip("/").endswith("/list")
-                and gallery_user_id
-            ):
-                return _gallery_list_with_shares(
-                    response, gallery_user_id, gallery_username
-                )
-            return response
+        if (
+            path.startswith("/usgromana-gallery")
+            and assets_mode == ASSETS_VISIBILITY_DISABLE_ALL
+            and path.rstrip("/").endswith("/list")
+            and request.method == "GET"
+        ):
+            # The gallery addon owns its own account scoping and share controls.
+            return web.json_response(
+                {"ok": True, "images": [], "folders": []},
+                status=200,
+            )
 
         if (
             request.method == "GET"

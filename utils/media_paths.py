@@ -3,15 +3,8 @@
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager
-from typing import Iterator
 
 from ..globals import access_control
-from .ui_defaults import (
-    ASSETS_VISIBILITY_ALLOW_ALL,
-    ASSETS_VISIBILITY_DISABLE_ALL,
-    ASSETS_VISIBILITY_USER_SPECIFIC,
-)
 
 
 def global_output_directory() -> str:
@@ -79,56 +72,3 @@ def resolve_static_gallery_path(relative_path: str) -> str | None:
     if not _is_under(candidate, base):
         return None
     return candidate if os.path.isfile(candidate) else None
-
-
-@contextmanager
-def gallery_scan_folder_paths(
-    visibility_mode: str,
-    user_id: str | None = None,
-) -> Iterator[None]:
-    """
-    Temporarily set folder_paths getters for Usgromana Gallery list/serve.
-
-    Gallery requests pass user_specific so each account scans only
-    output/<user_id>/. A request with no user id scans an empty directory
-    instead of the global output tree. NSFW filtering is applied separately.
-    """
-    import folder_paths
-
-    mode = visibility_mode
-    ac = access_control
-    saved = (
-        folder_paths.get_output_directory,
-        folder_paths.get_input_directory,
-        folder_paths.get_temp_directory,
-    )
-
-    if mode == ASSETS_VISIBILITY_ALLOW_ALL:
-        folder_paths.get_output_directory = ac._AccessControl__get_output_directory
-        folder_paths.get_input_directory = ac._AccessControl__get_input_directory
-        folder_paths.get_temp_directory = ac._AccessControl__get_temp_directory
-    elif mode == ASSETS_VISIBILITY_USER_SPECIFIC and user_id:
-        base_out = os.path.abspath(ac._AccessControl__get_output_directory())
-        base_in = os.path.abspath(ac._AccessControl__get_input_directory())
-        user_out = os.path.join(base_out, user_id)
-        user_in = os.path.join(base_in, user_id)
-        os.makedirs(user_out, exist_ok=True)
-        os.makedirs(user_in, exist_ok=True)
-
-        folder_paths.get_output_directory = lambda uo=user_out: uo
-        folder_paths.get_input_directory = lambda ui=user_in: ui
-        folder_paths.get_temp_directory = ac._AccessControl__get_temp_directory
-    else:
-        # No resolved user must not fall through to the global output tree.
-        private_root = os.path.join(global_output_directory(), ".usgromana-no-user")
-        os.makedirs(private_root, exist_ok=True)
-        folder_paths.get_output_directory = lambda root=private_root: root
-        folder_paths.get_input_directory = lambda root=private_root: root
-        folder_paths.get_temp_directory = lambda root=private_root: root
-
-    try:
-        yield
-    finally:
-        folder_paths.get_output_directory = saved[0]
-        folder_paths.get_input_directory = saved[1]
-        folder_paths.get_temp_directory = saved[2]
