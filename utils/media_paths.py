@@ -89,12 +89,9 @@ def gallery_scan_folder_paths(
     """
     Temporarily set folder_paths getters for Usgromana Gallery list/serve.
 
-    Uses assets visibility only (who may be listed). NSFW filtering is applied
-    separately by the gallery backend via nsfw_media_filter / should_block APIs.
-
-    Per-user folder_paths patching hides global output/; gallery must scan:
-    - allow_all: entire global output tree
-    - user_specific: output/<user_id>/ only
+    Gallery requests pass user_specific so each account scans only
+    output/<user_id>/. A request with no user id scans an empty directory
+    instead of the global output tree. NSFW filtering is applied separately.
     """
     import folder_paths
 
@@ -121,7 +118,13 @@ def gallery_scan_folder_paths(
         folder_paths.get_output_directory = lambda uo=user_out: uo
         folder_paths.get_input_directory = lambda ui=user_in: ui
         folder_paths.get_temp_directory = ac._AccessControl__get_temp_directory
-    # disable_all / no user: leave patched getters as-is
+    else:
+        # No resolved user must not fall through to the global output tree.
+        private_root = os.path.join(global_output_directory(), ".usgromana-no-user")
+        os.makedirs(private_root, exist_ok=True)
+        folder_paths.get_output_directory = lambda root=private_root: root
+        folder_paths.get_input_directory = lambda root=private_root: root
+        folder_paths.get_temp_directory = lambda root=private_root: root
 
     try:
         yield

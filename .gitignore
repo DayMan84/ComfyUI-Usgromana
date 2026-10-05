@@ -5,6 +5,7 @@ users/usgromana_groups.json
 users/usgromana_ui_defaults.json
 users/whitelist.txt
 users/blacklist.txt
+users/image_shares.json
 !users/defaults/
 
 usgromana.log
