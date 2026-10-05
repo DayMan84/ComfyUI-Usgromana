@@ -4,11 +4,34 @@
  */
 const SHARE_API = "/usgromana/api/image-shares";
 
-function selectedRelpaths() {
-    if (typeof window.USG_GALLERY_GET_SELECTED !== "function") {
-        return [];
+function relpathFromCard(card) {
+    const img = card.querySelector("img");
+    const src = (img && (img.getAttribute("src") || img.src)) || "";
+    try {
+        const filename = new URL(src, window.location.origin).searchParams.get("filename");
+        if (filename) return filename;
+    } catch (err) {
+        /* ignore malformed thumbnail URLs */
     }
-    return window.USG_GALLERY_GET_SELECTED().filter(Boolean);
+    return "";
+}
+
+function selectedFromDom() {
+    return [...document.querySelectorAll(".usg-gallery-card")]
+        .filter((card) => {
+            const border = (card.style.border || "").trim();
+            return border && border !== "none";
+        })
+        .map(relpathFromCard)
+        .filter(Boolean);
+}
+
+function selectedRelpaths() {
+    if (typeof window.USG_GALLERY_GET_SELECTED === "function") {
+        const published = window.USG_GALLERY_GET_SELECTED().filter(Boolean);
+        if (published.length) return published;
+    }
+    return selectedFromDom();
 }
 
 function selectedOwnImages() {
